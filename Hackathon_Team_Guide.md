@@ -145,11 +145,11 @@ We have designed a multi-agent system with the following core agents:
 ```mermaid
 graph TD
     subgraph Agentic Workflow
-        A[Document Parsing Agent] --> B[Clause Extraction Agent]
+        A[Document Parsing Agent / Structured Output] --> B[Clause Extraction Agent]
         B --> C[NER Agent]
         C --> D[Clause Generation Agent]
         D --> E[Summarization Agent]
-        E --> F[Final Output]
+        E --> F[Final Structured Output]
     end
 
     subgraph User Interaction
