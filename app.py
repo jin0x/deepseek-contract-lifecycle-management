@@ -19,7 +19,7 @@ def main():
     contract_path = Path("sample_contracts/AlliedEsportsEntertainmentInc_20190815_8-K_EX-10.19_11788293_EX-10.19_Content License Agreement.pdf")
 
     # Process the contract
-    result = processor.process_contract(contract_path)
+    result = processor.process_pdf(contract_path)
 
     # Handle the result
     if result.status == "success":
