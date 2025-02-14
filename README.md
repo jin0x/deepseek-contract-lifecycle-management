@@ -33,7 +33,8 @@ uv sync
 1. Set up your environment variables:
 
 ```sh
-DEEPSEEK_API_KEY=your_api_key_here
+DEEPSEEK_API_KEY=your_api_key_here # Temporary not in use
+OPENAI_API_KEY=your_api_key_here  # Please keep in mind that this is temporary and will be removed in the future.
 ```
 
 2. Run the project:
