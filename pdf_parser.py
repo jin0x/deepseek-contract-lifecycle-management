@@ -66,7 +66,7 @@ def get_text(file_path):
     return structured_output
 
 
-if __name__ == "__main__":
-    pdf_path = "EmmisCommunicationsCorp_20191125_8-K_EX-10.6_11906433_EX-10.6_Marketing Agreement.pdf"
-    parsed_data = get_text(pdf_path)
-    print(json.dumps(parsed_data, indent=4))
+# if __name__ == "__main__":
+#     pdf_path = "EmmisCommunicationsCorp_20191125_8-K_EX-10.6_11906433_EX-10.6_Marketing Agreement.pdf"
+#     parsed_data = get_text(pdf_path)
+#     print(json.dumps(parsed_data, indent=4))
