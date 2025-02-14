@@ -1,0 +1,15 @@
+[project]
+name = "contract-processor"
+version = "0.1.0"
+description = "Contract Lifecycle Management System using DeepSeek and Agno"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "agno",
+    "pydantic>=2.10.6",
+    "openai>=1.61.0",
+    "PyMuPDF>=1.24.0", # for PDF text extraction
+    "pytesseract>=0.3.10", # for OCR functionality
+    "pdfplumber>=0.10.3", # additional PDF handling
+    "python-dotenv>=1.0.0", # for environment variables
+]
