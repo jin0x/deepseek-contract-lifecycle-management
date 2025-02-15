@@ -2,7 +2,7 @@ from pathlib import Path
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 from models import Contract, ProcessingResponse, Clause
-from pdf_parser import PDFParser
+from utils.pdf_parser import PDFParser
 from utils.helpers import get_logger
 import json
 

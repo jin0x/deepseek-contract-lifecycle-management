@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from pathlib import Path
-from contract_processor import ContractProcessingAgent
+from agents.contract_processor import ContractProcessingAgent
 from utils.helpers import get_logger
 
 logger = get_logger(__name__)
