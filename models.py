@@ -10,7 +10,7 @@ class ClauseMetadata(BaseModel):
     extracted_by: str
 
 class Clause(BaseModel):
-    clause: int
+clause_category: str
     section_name: Optional[str]
     clause_text: str
     related_dates: List[str]
