@@ -163,7 +163,6 @@ def main():
                                 st.write(f"Amounts: {', '.join(clause.related_amounts)}")
                             # Display metadata
                             st.write(f"Confidence Score: {clause.metadata.confidence_score}")
-                            st.write(f"Extracted By: {clause.metadata.extracted_by}")
                             if clause.section_name:  # Optional field
                                 st.write(f"Section: {clause.section_name}")
                             st.markdown("---")

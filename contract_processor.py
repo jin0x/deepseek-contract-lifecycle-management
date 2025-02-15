@@ -169,7 +169,6 @@ class ContractProcessingAgent:
             - **Amounts (`amounts`)** → Leave blank unless a monetary value is detected (NER will handle this).
             - **Metadata (`metadata`)**:
             - `"confidence_score"`: AI confidence level for extracted text.
-            - `"extracted_by": "Document Parsing Agent"`
 
             ⚠️ Flag any issues encountered during clause extraction:
             - `"warning": "Reference to Section 5—full text unavailable."` (Cross-referenced but missing details).
@@ -231,7 +230,6 @@ class ContractProcessingAgent:
             4. Metadata:
             - "metadata": {{
                 "confidence_score": <float between 0 and 1>,
-                "extracted_by": "Clause Extraction Agent"
             }}
 
             Output Format:
@@ -245,7 +243,6 @@ class ContractProcessingAgent:
                         "related_amounts": ["$50,000", "$100,000"],
                         "metadata": {{
                             "confidence_score": 0.95,
-                            "extracted_by": "Clause Extraction Agent"
                         }}
                     }}
                 ]
