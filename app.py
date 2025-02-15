@@ -1,5 +1,6 @@
+import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
-import os
 from pathlib import Path
 from contract_processor import ContractProcessingAgent
 from utils.helpers import get_logger
@@ -12,6 +13,75 @@ def init_session_state():
         st.session_state.openai_api_key = None
     if 'processor' not in st.session_state:
         st.session_state.processor = None
+
+def create_visualizations(result):
+    """Create visualizations for contract analysis"""
+    st.header("📊 Analysis Visualizations")
+
+    # 1. Clause Categories Distribution
+    with st.container():
+        st.subheader("Distribution of Clause Categories")
+        categories = [clause.clause_category for clause in result.document.clauses]
+        category_counts = pd.Series(categories).value_counts()
+
+        fig1 = go.Figure(data=[go.Pie(
+            labels=category_counts.index,
+            values=category_counts.values,
+            hole=.3  # Makes it a donut chart
+        )])
+        fig1.update_layout(
+            title="Clause Categories Distribution",
+            height=400
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+
+    # 2. Confidence Scores Chart
+    with st.container():
+        st.subheader("Analysis Confidence by Clause")
+        confidence_scores = [clause.metadata.confidence_score for clause in result.document.clauses]
+        clause_names = [clause.clause_name for clause in result.document.clauses]
+
+        fig2 = go.Figure(data=[go.Bar(
+            x=clause_names,
+            y=confidence_scores,
+            marker_color='lightblue'
+        )])
+        fig2.update_layout(
+            title="Clause Analysis Confidence Scores",
+            xaxis_title="Clause Name",
+            yaxis_title="Confidence Score",
+            height=400,
+            xaxis_tickangle=-45
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+    # 3. Timeline of Key Dates
+    all_dates = []
+    date_labels = []
+    for clause in result.document.clauses:
+        if clause.related_dates:
+            for date in clause.related_dates:
+                all_dates.append(date)
+                date_labels.append(clause.clause_name)
+
+    if all_dates:  # Only show if we have dates
+        with st.container():
+            st.subheader("Contract Timeline")
+            fig3 = go.Figure(data=[go.Scatter(
+                x=all_dates,
+                y=date_labels,
+                mode='markers+text',
+                marker=dict(size=12),
+                text=all_dates,
+                textposition="top center"
+            )])
+            fig3.update_layout(
+                title="Key Dates Timeline",
+                xaxis_title="Date",
+                yaxis_title="Clause",
+                height=max(300, len(all_dates) * 50)  # Dynamic height based on number of dates
+            )
+            st.plotly_chart(fig3, use_container_width=True)
 
 def main():
     st.set_page_config(
@@ -100,6 +170,9 @@ def main():
 
                     with st.expander("📊 Summary"):
                         st.write(result.document.summary)
+
+                    # Show visualizations
+                    create_visualizations(result)
 
                 else:
                     st.error(f"❌ Error processing contract: {result.error}")
