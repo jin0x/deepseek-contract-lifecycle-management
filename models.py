@@ -11,6 +11,7 @@ class ClauseMetadata(BaseModel):
 
 class Clause(BaseModel):
     clause_category: str
+    clause_name: str
     section_name: Optional[str]
     clause_text: str
     related_dates: List[str]

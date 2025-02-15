@@ -147,58 +147,58 @@ class ContractProcessingAgent:
             metadata_prompt = f"""
             You are an advanced AI document parsing specialist. Your task is to accurately extract contract metadata, structure clauses for processing, and flag potential issues while preserving legal integrity.
 
-            **Step 1: Extract & Structure Contract Metadata**  
-            Extract and structure contract metadata according to the `Contract` class format.  
+            **Step 1: Extract & Structure Contract Metadata**
+            Extract and structure contract metadata according to the `Contract` class format.
 
-            - **Contract Title (`contract_title`)** → Extract the full contract title exactly as stated.  
-            - **Contract Date (`contract_date`)** → Identify and extract the official start date of the agreement.  
-            - **Parties Involved (`parties_involved`)**: Extract the name and role of each party in structured format:  
-            - Example: `"party_name": "Company A", "role": "Service Provider"`  
-            - Example: `"party_name": "Company B", "role": "Client"`  
+            - **Contract Title (`contract_title`)** → Extract the full contract title exactly as stated.
+            - **Contract Date (`contract_date`)** → Identify and extract the official start date of the agreement.
+            - **Parties Involved (`parties_involved`)**: Extract the name and role of each party in structured format:
+            - Example: `"party_name": "Company A", "role": "Service Provider"`
+            - Example: `"party_name": "Company B", "role": "Client"`
 
-            ⚠️ If any metadata fields are missing, incomplete, or ambiguous, flag them:  
-            - Example: `"warning": "Contract date missing—manual review needed."`  
+            ⚠️ If any metadata fields are missing, incomplete, or ambiguous, flag them:
+            - Example: `"warning": "Contract date missing—manual review needed."`
 
-            **Step 2: Extract & Structure Major Contract Sections**  
-            Identify and extract key contract clauses, ensuring they align with the `Clause` class structure.  
+            **Step 2: Extract & Structure Major Contract Sections**
+            Identify and extract key contract clauses, ensuring they align with the `Clause` class structure.
 
-            - **Clause Category (`clause_category`)** → Assign a general category based on the clause's legal function (e.g., Financial Terms, Termination, Confidentiality).  
-            - **Clause Name (`clause_name`)** → Extract the exact heading/title of the clause.  
-            - **Clause Text (`clause_text`)** → Extract the full clause content without truncation.  
-            - **Related Dates (`related_dates`)** → Leave blank unless a date is detected (NER will handle this).  
-            - **Amounts (`amounts`)** → Leave blank unless a monetary value is detected (NER will handle this).  
-            - **Metadata (`metadata`)**:  
-            - `"confidence_score"`: AI confidence level for extracted text.  
-            - `"extracted_by": "Document Parsing Agent"`  
+            - **Clause Category (`clause_category`)** → Assign a general category based on the clause's legal function (e.g., Financial Terms, Termination, Confidentiality).
+            - **Clause Name (`clause_name`)** → Extract the exact heading/title of the clause.
+            - **Clause Text (`clause_text`)** → Extract the full clause content without truncation.
+            - **Related Dates (`related_dates`)** → Leave blank unless a date is detected (NER will handle this).
+            - **Amounts (`amounts`)** → Leave blank unless a monetary value is detected (NER will handle this).
+            - **Metadata (`metadata`)**:
+            - `"confidence_score"`: AI confidence level for extracted text.
+            - `"extracted_by": "Document Parsing Agent"`
 
-            ⚠️ Flag any issues encountered during clause extraction:  
-            - `"warning": "Reference to Section 5—full text unavailable."` (Cross-referenced but missing details).  
-            - `"warning": "Clause may be incomplete—possible text truncation."` (Potential missing content).  
+            ⚠️ Flag any issues encountered during clause extraction:
+            - `"warning": "Reference to Section 5—full text unavailable."` (Cross-referenced but missing details).
+            - `"warning": "Clause may be incomplete—possible text truncation."` (Potential missing content).
 
-            **Step 3: Handle Formatting, OCR Issues & Error Detection**  
-            Ensure document formatting remains clean and detect common errors.  
+            **Step 3: Handle Formatting, OCR Issues & Error Detection**
+            Ensure document formatting remains clean and detect common errors.
 
-            - **OCR Issues:** If text quality is poor, flag `"warning": "OCR issue detected—possible missing text."`  
-            - **Section Numbering Errors:** If clause numbers are inconsistent, flag `"warning": "Clause numbering mismatch detected."`  
-            - **Duplicate Clauses:** If similar clauses appear multiple times, flag `"warning": "Possible duplicate detected—review needed."`  
+            - **OCR Issues:** If text quality is poor, flag `"warning": "OCR issue detected—possible missing text."`
+            - **Section Numbering Errors:** If clause numbers are inconsistent, flag `"warning": "Clause numbering mismatch detected."`
+            - **Duplicate Clauses:** If similar clauses appear multiple times, flag `"warning": "Possible duplicate detected—review needed."`
 
-            **Step 4: Validate Processing & Error Handling**  
-            Ensure structured contract output follows the `Contract` class format:  
+            **Step 4: Validate Processing & Error Handling**
+            Ensure structured contract output follows the `Contract` class format:
 
-            ✅ **Successful Parsing:**  
-            - `"status": "success"`  
-            - `"document": {{ structured contract output }}`  
+            ✅ **Successful Parsing:**
+            - `"status": "success"`
+            - `"document": {{ structured contract output }}`
 
-            ❌ **Parsing Failure (If structure is inconsistent):**  
-            - `"status": "failed"`  
-            - `"error": "Contract could not be parsed due to format inconsistency."`  
+            ❌ **Parsing Failure (If structure is inconsistent):**
+            - `"status": "failed"`
+            - `"error": "Contract could not be parsed due to format inconsistency."`
 
-            **Final Execution Guidelines for AI**  
-            ✅ Extract all contract metadata and structure it properly.  
-            ✅ Ensure clauses align with predefined legal categories.  
-            ✅ Prepare placeholders for NER processing (dates, amounts).  
-            ✅ Detect and flag formatting errors, missing data, or inconsistencies.  
-            ✅ Ensure structured output follows `Contract` and `ProcessingResponse` models.  
+            **Final Execution Guidelines for AI**
+            ✅ Extract all contract metadata and structure it properly.
+            ✅ Ensure clauses align with predefined legal categories.
+            ✅ Prepare placeholders for NER processing (dates, amounts).
+            ✅ Detect and flag formatting errors, missing data, or inconsistencies.
+            ✅ Ensure structured output follows `Contract` and `ProcessingResponse` models.
 
             Text: {text}
             """
@@ -206,7 +206,7 @@ class ContractProcessingAgent:
             metadata_result = self.parsing_agent.run(metadata_prompt)
             logger.debug(f"Raw metadata result: {metadata_result}")
             logger.debug(f"Metadata type: {type(metadata_result)}")
-            logger.info(f"Metadata extraction result: {metadata_result.content if hasattr(metadata_result, 'content') else metadata_result}")  
+            logger.info(f"Metadata extraction result: {metadata_result.content if hasattr(metadata_result, 'content') else metadata_result}")
 
             print(f"metadata_result type: {type(metadata_result)}")
             print(f"metadata_result dir: {dir(metadata_result)}")
@@ -219,10 +219,10 @@ class ContractProcessingAgent:
 
             1. Sequential Numbering:
             - "clause": <number>  # Number each clause sequentially
-            
+
             2. Section Information:
             - "section_name": <name>  # Extract section names/headers
-            
+
             3. Detailed Extraction:
             - "clause_text": <full text>  # Complete clause text without truncation
             - "related_dates": [<list of all dates found>]  # All dates mentioned in the clause
@@ -272,50 +272,50 @@ class ContractProcessingAgent:
             classification_prompt = f"""
             You are an advanced AI contract clause classification specialist. Your task is to analyze and categorize contract clauses based on their legal purpose and function, ensuring standardization, consistency, and accuracy.
 
-            ### **Step 1: Analyze Clause Context & Determine Classification**  
+            ### **Step 1: Analyze Clause Context & Determine Classification**
             Classify each clause into one of the following predefined legal categories based on its content and function:
 
-            - **Financial Terms** → (Payment Obligations, Fees, Compensation, Penalties, Late Payments)  
-            - **Confidentiality & NDA** → (Data Protection, Trade Secrets, Non-Disclosure, Information Sharing)  
-            - **Termination & Breach** → (Exit Clauses, Termination Rights, Auto-Renewals, Breach Consequences)  
-            - **Indemnification & Liability** → (Risk Allocation, Damages, Legal Responsibilities)  
-            - **Dispute Resolution & Governing Law** → (Arbitration, Mediation, Legal Jurisdiction, Governing Law)  
-            - **Rights & Restrictions** → (Ownership, IP Rights, Exclusivity, Licensing, Non-Compete)  
-            - **Miscellaneous** → (Catch-All for Clauses That Do Not Fit Clearly into the Above Categories)  
+            - **Financial Terms** → (Payment Obligations, Fees, Compensation, Penalties, Late Payments)
+            - **Confidentiality & NDA** → (Data Protection, Trade Secrets, Non-Disclosure, Information Sharing)
+            - **Termination & Breach** → (Exit Clauses, Termination Rights, Auto-Renewals, Breach Consequences)
+            - **Indemnification & Liability** → (Risk Allocation, Damages, Legal Responsibilities)
+            - **Dispute Resolution & Governing Law** → (Arbitration, Mediation, Legal Jurisdiction, Governing Law)
+            - **Rights & Restrictions** → (Ownership, IP Rights, Exclusivity, Licensing, Non-Compete)
+            - **Miscellaneous** → (Catch-All for Clauses That Do Not Fit Clearly into the Above Categories)
 
-            ### **Step 2: Verify Classification Confidence & Handle Uncertainty**  
-            ✅ **Accurate Classification:**  
-            - If the clause explicitly states its category (e.g., "Payment Terms"), confirm it aligns with the extracted text.  
-            - If multiple categories seem relevant, classify based on the **primary function** of the clause.  
+            ### **Step 2: Verify Classification Confidence & Handle Uncertainty**
+            ✅ **Accurate Classification:**
+            - If the clause explicitly states its category (e.g., "Payment Terms"), confirm it aligns with the extracted text.
+            - If multiple categories seem relevant, classify based on the **primary function** of the clause.
 
-            ✅ **Uncertain Classification:**  
-            - If the AI **is unsure about a classification**, label it as `"Miscellaneous"` and **add a warning**.  
-            - Example: `"warning": "Clause classification uncertain—manual review needed."`  
-            - If a clause **contains multiple legal functions** (e.g., penalties + termination), return the **primary category** and **flag it for human review**.  
-            - Example: `"warning": "Overlapping clause categories detected—review recommended."`  
+            ✅ **Uncertain Classification:**
+            - If the AI **is unsure about a classification**, label it as `"Miscellaneous"` and **add a warning**.
+            - Example: `"warning": "Clause classification uncertain—manual review needed."`
+            - If a clause **contains multiple legal functions** (e.g., penalties + termination), return the **primary category** and **flag it for human review**.
+            - Example: `"warning": "Overlapping clause categories detected—review recommended."`
 
-            ### **Step 3: Ensure Legal Integrity & Formatting Consistency**  
-            ✅ **Preserve Clause Formatting**  
-            - Do **not alter or rephrase the clause text**—classification should be based on **legal function, not language style**.  
-            - Maintain **section numbering and paragraph structure** to preserve context.  
+            ### **Step 3: Ensure Legal Integrity & Formatting Consistency**
+            ✅ **Preserve Clause Formatting**
+            - Do **not alter or rephrase the clause text**—classification should be based on **legal function, not language style**.
+            - Maintain **section numbering and paragraph structure** to preserve context.
 
-            ✅ **Detect & Flag Misclassified Clauses**  
-            - If a clause appears **misclassified based on content**, return:  
-            - Example: `"warning": "Potential misclassification—manual verification recommended."`  
-            - If a clause **does not match any category**, assign `"Miscellaneous"` and provide an explanation.  
+            ✅ **Detect & Flag Misclassified Clauses**
+            - If a clause appears **misclassified based on content**, return:
+            - Example: `"warning": "Potential misclassification—manual verification recommended."`
+            - If a clause **does not match any category**, assign `"Miscellaneous"` and provide an explanation.
 
-            ### **Step 4: Validate Classification & Handle Errors**  
-            ✅ **If Classification is Successful, Return:**  
-            - `"status": "success"`  
+            ### **Step 4: Validate Classification & Handle Errors**
+            ✅ **If Classification is Successful, Return:**
+            - `"status": "success"`
             - `"document": {{ structured clause classification output }}`
 
-            ❌ **If Classification Fails (Unclear or Incomplete Clause), Return:**  
-            - `"status": "failed"`  
-            - `"error": "Clause classification failed due to ambiguous content."`  
+            ❌ **If Classification Fails (Unclear or Incomplete Clause), Return:**
+            - `"status": "failed"`
+            - `"error": "Clause classification failed due to ambiguous content."`
 
-            ⚠️ **Additional Warnings for Edge Cases:**  
-            - `"warning": "Clause category inferred based on context—review recommended."`  
-            - `"warning": "Clause references external section—full classification may be incomplete."`  
+            ⚠️ **Additional Warnings for Edge Cases:**
+            - `"warning": "Clause category inferred based on context—review recommended."`
+            - `"warning": "Clause references external section—full classification may be incomplete."`
 
             Input Clauses: {clauses_result.content}
             """
@@ -492,10 +492,10 @@ class ContractProcessingAgent:
             try:
                 # Get metadata from RunResponse
                 metadata_content = metadata_result.content if hasattr(metadata_result, 'content') else metadata_result
-                
+
                 # Get clauses from RunResponse
                 clauses_content = generated_clauses.content if hasattr(generated_clauses, 'content') else generated_clauses
-                
+
                 # Get summary from RunResponse
                 summary_content = summary_result.content if hasattr(summary_result, 'content') else summary_result
 
