@@ -33,6 +33,7 @@ pandas==2.2.3
 pdfminer-six==20231228
 pdfplumber==0.11.5
 pillow==11.1.0
+plotly==6.0.0
 protobuf==5.29.3
 pyarrow==19.0.0
 pycparser==2.22
