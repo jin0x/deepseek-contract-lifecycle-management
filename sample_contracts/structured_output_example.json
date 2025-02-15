@@ -1,0 +1,38 @@
+{
+  "contract_title": "Service Agreement",
+  "contract_date": "2025-02-14",
+  "parties_involved": [
+    {
+      "party_name": "ABC Corp",
+      "role": "Service Provider"
+    },
+    {
+      "party_name": "XYZ Ltd",
+      "role": "Client"
+    }
+  ],
+  "clauses": [
+    {
+      "clause_category": "Category",
+      "clause_name": "Payment Terms",
+      "clause_text": "The client agrees to pay $10,000 within 30 days of receiving an invoice.",
+      "related_dates": ["2025-03-01"],
+      "amounts": ["10000"],
+      "metadata": {
+        "confidence_score": 0.95,
+        "extracted_by": "NER Agent"
+      }
+    },
+    {
+      "clause_category": "Category",
+      "clause_name": "Termination Clause",
+      "clause_text": "Either party may terminate the agreement with 30 days written notice.",
+      "related_dates": ["2025-04-01"],
+      "metadata": {
+        "confidence_score": 0.88,
+        "extracted_by": "Clause Extraction Agent"
+      }
+    }
+  ],
+  "summary": "This is a service agreement between ABC Corp and XYZ Ltd for consulting services. Payment terms require a fee of $10,000, and either party can terminate with 30 days' notice."
+}
