@@ -85,7 +85,7 @@ def create_visualizations(result):
 
 def main():
     st.set_page_config(
-        page_title="Contract Analysis Tool",
+        page_title="Contract Lifecycle Management Tool",
         page_icon="📄",
         layout="wide"
     )
