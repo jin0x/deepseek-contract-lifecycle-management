@@ -7,10 +7,10 @@ class Party(BaseModel):
 
 class ClauseMetadata(BaseModel):
     confidence_score: float
-    extracted_by: str
 
 class Clause(BaseModel):
     clause_category: str
+    clause_name: str
     section_name: Optional[str]
     clause_text: str
     related_dates: List[str]

@@ -91,7 +91,7 @@ def show_landing_page():
             <div class="landing-text">
                 <h1 class="landing-title">Bringing the Power of AI to Contract Management</h1>
                 <p class="landing-subtitle">
-                    Increase contracting efficiency by 80% across your business with our intuitive, 
+                    Increase contracting efficiency by 80% across your business with our intuitive,
                     customizable, and AI-powered contract management solution.
                 </p>
             </div>
@@ -120,7 +120,7 @@ def show_login_page():
                 go_to_dashboard()
             else:
                 st.error("Invalid credentials or user not found.")
-    
+
     else:  # Signup
         name = st.text_input("Full Name")
         email = st.text_input("Email")

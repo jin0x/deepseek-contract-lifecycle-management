@@ -13,4 +13,6 @@ dependencies = [
     "pdfplumber>=0.10.3", # additional PDF handling
     "python-dotenv>=1.0.0", # for environment variables
     "streamlit>=1.42.0",
+    "pandas>=2.2.3",
+    "plotly>=6.0.0",
 ]
