@@ -2,7 +2,12 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from pathlib import Path
-from contract_processor import ContractProcessingAgent
+from agents.contract_processor import ContractProcessingAgent
+from components.charts.category_chart import create_clause_category_chart
+from components.charts.confidence_chart import create_confidence_chart
+from components.charts.timeline_chart import create_timeline_chart
+from components.displays.contract_overview import display_contract_overview
+from components.displays.clause_display import display_clauses
 from utils.helpers import get_logger
 
 logger = get_logger(__name__)
@@ -14,166 +19,6 @@ def init_session_state():
         st.session_state.openai_api_key = None
     if 'processor' not in st.session_state:
         st.session_state.processor = None
-
-
-def create_clause_category_chart(result):
-    """Create an enhanced donut chart for clause categories"""
-    categories = [clause.clause_category for clause in result.document.clauses]
-    category_counts = pd.Series(categories).value_counts()
-
-    colors = ['#FF9999', '#66B2FF', '#99FF99', '#FFCC99', '#FF99CC', '#99CCFF']
-    fig = go.Figure(data=[go.Pie(
-        labels=category_counts.index,
-        values=category_counts.values,
-        hole=0.4,
-        marker=dict(colors=colors),
-        textinfo='label+percent',
-        textposition='outside',
-        pull=[0.1] * len(category_counts)
-    )])
-
-    fig.update_layout(
-        title={
-            'text': "Distribution of Clause Categories",
-            'y': 0.95,
-            'x': 0.5,
-            'xanchor': 'center',
-            'yanchor': 'top',
-            'font': {'size': 24}
-        },
-        showlegend=False,
-        height=400,
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)'
-    )
-    return fig
-
-
-def create_confidence_chart(result):
-    """Create an enhanced bar chart for confidence scores"""
-    confidence_scores = [clause.metadata.confidence_score for clause in result.document.clauses]
-    clause_names = [clause.clause_name for clause in result.document.clauses]
-
-    fig = go.Figure(data=[go.Bar(
-        x=clause_names,
-        y=confidence_scores,
-        marker_color='#66B2FF',
-        marker_line_color='#3399FF',
-        marker_line_width=1.5,
-        opacity=0.8
-    )])
-
-    fig.update_layout(
-        title={
-            'text': "Clause Analysis Confidence Scores",
-            'y': 0.95,
-            'x': 0.5,
-            'xanchor': 'center',
-            'yanchor': 'top',
-            'font': {'size': 24}
-        },
-        xaxis_title="Clause Name",
-        yaxis_title="Confidence Score",
-        height=400,
-        xaxis_tickangle=-45,
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)'
-    )
-    return fig
-
-
-def create_timeline_chart(result):
-    """Create an enhanced timeline visualization"""
-    all_dates = []
-    date_labels = []
-    for clause in result.document.clauses:
-        if clause.related_dates:
-            for date in clause.related_dates:
-                all_dates.append(date)
-                date_labels.append(clause.clause_name)
-
-    if not all_dates:
-        return None
-
-    fig = go.Figure(data=[go.Scatter(
-        x=all_dates,
-        y=date_labels,
-        mode='markers+text',
-        marker=dict(
-            size=15,
-            color='#66B2FF',
-            symbol='diamond',
-            line=dict(color='#3399FF', width=2)
-        ),
-        text=all_dates,
-        textposition="top center",
-        textfont=dict(size=12)
-    )])
-
-    fig.update_layout(
-        title={
-            'text': "Contract Timeline",
-            'y': 0.95,
-            'x': 0.5,
-            'xanchor': 'center',
-            'yanchor': 'top',
-            'font': {'size': 24}
-        },
-        xaxis_title="Date",
-        yaxis_title="Clause",
-        height=max(300, len(all_dates) * 50),
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        showlegend=False
-    )
-    return fig
-
-
-def display_contract_overview(result):
-    """Display enhanced contract overview section"""
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("### 📋 Contract Details")
-        st.markdown(f"**Title:** {result.document.contract_title}")
-        st.markdown(f"**Date:** {result.document.contract_date}")
-
-    with col2:
-        st.markdown("### 👥 Parties Involved")
-        for party in result.document.parties_involved:
-            st.markdown(f"- **{party.party_name}** ({party.role})")
-
-
-def display_clauses(result):
-    """Display enhanced clauses section"""
-    st.markdown("## 📝 Contract Clauses Analysis")
-    st.markdown(f"**Total Clauses:** {len(result.document.clauses)}")
-
-    for i, clause in enumerate(result.document.clauses, 1):
-        with st.expander(f"Clause {i}: {clause.clause_name}"):
-            cols = st.columns([2, 1])
-
-            with cols[0]:
-                st.markdown("#### Main Content")
-                st.markdown(f"**Category:** {clause.clause_category}")
-                st.markdown("**Text:**")
-                st.markdown(f">{clause.clause_text}")
-
-            with cols[1]:
-                st.markdown("#### Additional Information")
-                if clause.related_dates:
-                    st.markdown("**Key Dates:**")
-                    for date in clause.related_dates:
-                        st.markdown(f"- {date}")
-
-                if clause.related_amounts:
-                    st.markdown("**Related Amounts:**")
-                    for amount in clause.related_amounts:
-                        st.markdown(f"- {amount}")
-
-                st.progress(clause.metadata.confidence_score,
-                            text=f"Confidence Score: {clause.metadata.confidence_score:.0%}")
-
 
 def main():
     st.set_page_config(
