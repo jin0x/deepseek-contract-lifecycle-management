@@ -10,21 +10,23 @@ class ClauseMetadata(BaseModel):
     extracted_by: str
 
 class Clause(BaseModel):
-    clause_category: str
-    clause_name: str
+clause_category: str
+    section_name: Optional[str]
     clause_text: str
     related_dates: List[str]
-    amounts: Optional[List[str]] = []  # Optional since some clauses might not have amounts
+    related_amounts: Optional[List[str]]
     metadata: ClauseMetadata
 
 class Contract(BaseModel):
+    pdf_name: str
     contract_title: str
     contract_date: str
     parties_involved: List[Party]
     clauses: List[Clause]
     summary: str
+    amounts: Optional[List[float]]
 
 class ProcessingResponse(BaseModel):
     status: str
-    error: Optional[str] = None
-    document: Optional[Contract] = None
+    error: Optional[str]
+    document: Optional[Contract]
