@@ -38,8 +38,8 @@ class ClauseCategory(str, Enum):
 
 class ClauseMetadata(BaseModel):
     confidence_score: float = Field(..., description="Confidence score of the clause extraction and classification")
-    processing_date: datetime = Field(default_factory=datetime.now, description="When the clause was processed")
     warnings: List[str] = Field(default_factory=list, description="Any warnings or flags during processing")
+    # processing_date: datetime = Field(default_factory=datetime.now, description="When the clause was processed")
 
 class Clause(BaseModel):
     clause_category: ClauseCategory = Field(..., description="Category of the clause")
@@ -62,7 +62,7 @@ class Contract(BaseModel):
     clauses: List[Clause] = Field(..., description="List of contract clauses")
     summary: str = Field(..., description="Executive summary of the contract")
     amounts: Optional[List[float]] = Field(None, description="Key monetary amounts in the contract")
-    processing_date: datetime = Field(default_factory=datetime.now, description="When the contract was processed")
+    # processing_date: datetime = Field(default_factory=datetime.now, description="When the contract was processed")
     confidence_score: float = Field(..., description="Overall confidence score of the processing")
 
 class ProcessingResponse(BaseModel):
