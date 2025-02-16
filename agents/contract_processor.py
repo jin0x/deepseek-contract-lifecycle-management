@@ -1,12 +1,25 @@
 from pathlib import Path
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
-from models import Contract, ProcessingResponse, Clause
+from models import Contract, ProcessingResponse, Clause, Party
 from utils.pdf_parser import PDFParser
 from utils.helpers import get_logger
 import json
 
+
+
 logger = get_logger(__name__)
+
+# Get the schema for expected output
+contract_schema = Contract.model_json_schema()
+party_schema = Party.model_json_schema()
+
+# Create a sample structure with only the metadata-relevant fields
+metadata_structure = {
+    "contract_title": contract_schema["properties"]["contract_title"],
+    "contract_date": contract_schema["properties"]["contract_date"],
+    "parties_involved": contract_schema["properties"]["parties_involved"]
+}
 
 class ContractProcessingAgent:
     def __init__(self, api_key: str):
@@ -116,7 +129,10 @@ class ContractProcessingAgent:
             logger.info("Extracting text from PDF")
             text = self.pdf_parser.parse_pdf(pdf_path)
             logger.debug(f"Extracted text length: {len(text)}")
-            logger.debug(f"First 500 chars of text: {text[:500]}")
+            # logger.debug(f"First 500 chars of text: {text[:500]}")
+
+            logger.info("🟣 PARTY SCHEMA: ", {json.dumps(party_schema, indent=2)})
+            logger.info("🟣 METADATA STRUCTURE: ", {json.dumps(metadata_structure, indent=2)})
 
             # Process the extracted text
             logger.info("Processing extracted text through contract pipeline")
@@ -142,62 +158,35 @@ class ContractProcessingAgent:
             ProcessingResponse: Processing result with either the structured contract data or error
         """
         try:
-           # 1. Extract and structure contract metadata
+            # 1. Extract and structure contract metadata
             logger.info("Step 1: Extracting contract metadata")
             metadata_prompt = f"""
-            You are an advanced AI document parsing specialist. Your task is to accurately extract contract metadata, structure clauses for processing, and flag potential issues while preserving legal integrity.
+            AI Document Parser: Extract contract metadata and structure with prescribed format.
 
-            **Step 1: Extract & Structure Contract Metadata**
-            Extract and structure contract metadata according to the `Contract` class format.
+            1. Extract Contract Metadata:
+            - Title: Full contract title (exact)
+            - Date: Official start date
+            - Parties: Extract name and role for each party
+            Format: {{"party_name": "Company A", "role": "Service Provider"}}
 
-            - **Contract Title (`contract_title`)** → Extract the full contract title exactly as stated.
-            - **Contract Date (`contract_date`)** → Identify and extract the official start date of the agreement.
-            - **Parties Involved (`parties_involved`)**: Extract the name and role of each party in structured format:
-            - Example: `"party_name": "Company A", "role": "Service Provider"`
-            - Example: `"party_name": "Company B", "role": "Client"`
+            2. Extract Major Sections:
+            - Category: Legal function (Financial, Termination, etc.)
+            - Name: Exact heading/title
+            - Text: Full clause content
+            - Dates: Leave for NER processing
+            - Amounts: Leave for NER processing
+            - Metadata: Include confidence score
 
-            ⚠️ If any metadata fields are missing, incomplete, or ambiguous, flag them:
-            - Example: `"warning": "Contract date missing—manual review needed."`
+            3. Output Requirements:
+            ✓ Success Format:
+            - "status": "success"
+            - "document": {{ structured contract output }}
 
-            **Step 2: Extract & Structure Major Contract Sections**
-            Identify and extract key contract clauses, ensuring they align with the `Clause` class structure.
+            ✗ Error Format:
+            - "status": "failed"
+            - "error": "Specific error message"
 
-            - **Clause Category (`clause_category`)** → Assign a general category based on the clause's legal function (e.g., Financial Terms, Termination, Confidentiality).
-            - **Clause Name (`clause_name`)** → Extract the exact heading/title of the clause.
-            - **Clause Text (`clause_text`)** → Extract the full clause content without truncation.
-            - **Related Dates (`related_dates`)** → Leave blank unless a date is detected (NER will handle this).
-            - **Amounts (`amounts`)** → Leave blank unless a monetary value is detected (NER will handle this).
-            - **Metadata (`metadata`)**:
-            - `"confidence_score"`: AI confidence level for extracted text.
-
-            ⚠️ Flag any issues encountered during clause extraction:
-            - `"warning": "Reference to Section 5—full text unavailable."` (Cross-referenced but missing details).
-            - `"warning": "Clause may be incomplete—possible text truncation."` (Potential missing content).
-
-            **Step 3: Handle Formatting, OCR Issues & Error Detection**
-            Ensure document formatting remains clean and detect common errors.
-
-            - **OCR Issues:** If text quality is poor, flag `"warning": "OCR issue detected—possible missing text."`
-            - **Section Numbering Errors:** If clause numbers are inconsistent, flag `"warning": "Clause numbering mismatch detected."`
-            - **Duplicate Clauses:** If similar clauses appear multiple times, flag `"warning": "Possible duplicate detected—review needed."`
-
-            **Step 4: Validate Processing & Error Handling**
-            Ensure structured contract output follows the `Contract` class format:
-
-            ✅ **Successful Parsing:**
-            - `"status": "success"`
-            - `"document": {{ structured contract output }}`
-
-            ❌ **Parsing Failure (If structure is inconsistent):**
-            - `"status": "failed"`
-            - `"error": "Contract could not be parsed due to format inconsistency."`
-
-            **Final Execution Guidelines for AI**
-            ✅ Extract all contract metadata and structure it properly.
-            ✅ Ensure clauses align with predefined legal categories.
-            ✅ Prepare placeholders for NER processing (dates, amounts).
-            ✅ Detect and flag formatting errors, missing data, or inconsistencies.
-            ✅ Ensure structured output follows `Contract` and `ProcessingResponse` models.
+            Flag any missing/unclear data with "warning" field.
 
             Text: {text}
             """
@@ -321,7 +310,7 @@ class ContractProcessingAgent:
             logger.info(f"Classification result: {classified_clauses.content if hasattr(classified_clauses, 'content') else classified_clauses}")
 
 
-           # 4. Extract entities from each clause
+            # 4. Extract entities from each clause
             logger.info("Step 4: Extracting named entities")
 
             ner_prompt = f"""
