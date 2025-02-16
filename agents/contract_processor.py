@@ -1,6 +1,8 @@
 from pathlib import Path
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
+from agno.models.deepseek import DeepSeek
+from agno.document.chunking.document import DocumentChunking
 from models import Contract, ProcessingResponse, Clause
 from utils.pdf_parser import PDFParser
 from utils.helpers import get_logger
@@ -16,7 +18,7 @@ class ContractProcessingAgent:
         self.parsing_agent = Agent(
             name="Document Parser",
             role="Document parsing specialist",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=DeepSeek(id="deepseek-chat", base_url="https://api.aimlapi.com/v1", api_key=api_key),
             instructions=["Extract contract metadata and structure"],
             markdown=True,
             show_tool_calls=True,
@@ -28,7 +30,7 @@ class ContractProcessingAgent:
         self.clause_agent = Agent(
             name="Clause Extractor",
             role="Contract clause extraction specialist",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=DeepSeek(id="deepseek-chat", base_url="https://api.aimlapi.com/v1", api_key=api_key),
             instructions=["Identify and extract individual contract clauses"],
             markdown=True,
             show_tool_calls=True,
@@ -40,7 +42,7 @@ class ContractProcessingAgent:
         self.classification_agent = Agent(
             name="Clause Classifier",
             role="Contract clause classification specialist",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=DeepSeek(id="deepseek-chat", base_url="https://api.aimlapi.com/v1", api_key=api_key),
             instructions=["Classify contract clauses into standard categories"],
             markdown=True,
             show_tool_calls=True,
@@ -52,7 +54,7 @@ class ContractProcessingAgent:
         self.ner_agent = Agent(
             name="NER Processor",
             role="Named Entity Recognition specialist",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=DeepSeek(id="deepseek-chat", base_url="https://api.aimlapi.com/v1", api_key=api_key),
             instructions=["Extract dates, amounts, and named entities from clauses"],
             markdown=True,
             show_tool_calls=True,
@@ -64,7 +66,7 @@ class ContractProcessingAgent:
         self.generation_agent = Agent(
             name="Clause Generator",
             role="Contract clause improvement specialist",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=DeepSeek(id="deepseek-chat", base_url="https://api.aimlapi.com/v1", api_key=api_key),
             instructions=["Generate improved versions of contract clauses"],
             markdown=True,
             show_tool_calls=True,
@@ -76,7 +78,7 @@ class ContractProcessingAgent:
         self.summary_agent = Agent(
             name="Contract Summarizer",
             role="Contract summarization specialist",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=DeepSeek(id="deepseek-chat", base_url="https://api.aimlapi.com/v1", api_key=api_key),
             instructions=["Create concise summaries of full contracts"],
             markdown=True,
             show_tool_calls=True,
@@ -88,7 +90,7 @@ class ContractProcessingAgent:
         self.agent_team = Agent(
             name="Contract Processing Team",
             role="Contract analysis coordination",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=DeepSeek(id="deepseek-chat", base_url="https://api.aimlapi.com/v1", api_key=api_key),
             team=[
                 self.parsing_agent,
                 self.clause_agent,
@@ -142,8 +144,27 @@ class ContractProcessingAgent:
             ProcessingResponse: Processing result with either the structured contract data or error
         """
         try:
-           # 1. Extract and structure contract metadata
+            # Log initial text stats
+            logger.info(f"""
+                Contract Processing Stats:
+                - Total text length: {len(text)} characters
+                - Number of paragraphs: {len(text.split('\n\n'))}
+            """)
+
+            # 1. Extract and structure contract metadata
             logger.info("Step 1: Extracting contract metadata")
+
+            # Initialize document chunking
+            chunking_strategy = DocumentChunking(
+                chunk_size=3000,  # Setting smaller than default to stay within DeepSeek limits
+                overlap=200       # For context preservation
+            )
+
+            # Split text into chunks
+            chunks = chunking_strategy.split(text)
+            logger.info(f"Split into {len(chunks)} chunks")
+
+
             metadata_prompt = f"""
             You are an advanced AI document parsing specialist. Your task is to accurately extract contract metadata, structure clauses for processing, and flag potential issues while preserving legal integrity.
 
@@ -202,13 +223,15 @@ class ContractProcessingAgent:
             Text: {text}
             """
 
+            logger.info(f"Metadata prompt length: {len(metadata_prompt)} characters")
             metadata_result = self.parsing_agent.run(metadata_prompt)
-            logger.debug(f"Raw metadata result: {metadata_result}")
-            logger.debug(f"Metadata type: {type(metadata_result)}")
-            logger.info(f"Metadata extraction result: {metadata_result.content if hasattr(metadata_result, 'content') else metadata_result}")
-
-            print(f"metadata_result type: {type(metadata_result)}")
-            print(f"metadata_result dir: {dir(metadata_result)}")
+            logger.info(f"""
+            Metadata Extraction Results:
+                - Result type: {type(metadata_result)}
+                - Result dir: {dir(metadata_result)}
+                - Has content: {hasattr(metadata_result, 'content')}
+                - Content length: {len(metadata_result.content) if hasattr(metadata_result, 'content') else 'N/A'}
+            """)
 
             # 2. Extract clauses
             logger.info("Step 2: Extracting clauses")
@@ -263,7 +286,7 @@ class ContractProcessingAgent:
             logger.debug(f"Clauses type: {type(clauses_result)}")
             logger.info(f"Clause extraction result: {clauses_result.content if hasattr(clauses_result, 'content') else clauses_result}")
 
-           # 3. Classify clauses
+            # 3. Classify clauses
             logger.info("Step 3: Classifying clauses")
 
             classification_prompt = f"""
@@ -321,7 +344,7 @@ class ContractProcessingAgent:
             logger.info(f"Classification result: {classified_clauses.content if hasattr(classified_clauses, 'content') else classified_clauses}")
 
 
-           # 4. Extract entities from each clause
+            # 4. Extract entities from each clause
             logger.info("Step 4: Extracting named entities")
 
             ner_prompt = f"""

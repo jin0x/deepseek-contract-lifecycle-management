@@ -3,6 +3,9 @@ import pdfplumber
 import pytesseract
 import re
 from pathlib import Path
+from utils.helpers import get_logger
+
+logger = get_logger(__name__)
 
 class PDFParser:
     def __init__(self):
@@ -45,12 +48,24 @@ class PDFParser:
         """Main method to parse PDF with fallback to OCR if needed"""
         try:
             # Try regular text extraction first
+            logger.info(f"Starting PDF parsing for file: {file}")
             text = self.extract_text_pdfplumber(file) or self.extract_text_pymupdf(file)
+            logger.info(f"Initial text extraction length: {len(text) if text else 0} characters")
 
             # If no text found and OCR is enabled, try OCR
             if not text.strip() and use_ocr:
+                logger.info("No text found, attempting OCR extraction")
                 text = self.extract_text_ocr(file)
+                logger.info(f"OCR extraction length: {len(text) if text else 0} characters")
 
-            return self.clean_text(text)
+
+            cleaned_text = self.clean_text(text)
+            logger.info(f"Final cleaned text length: {len(cleaned_text)} characters")
+
+            # Log a sample to understand content structure
+            logger.debug(f"First 500 characters of cleaned text: {cleaned_text[:500]}")
+
+            return cleaned_text
         except Exception as e:
+            logger.error(f"Error parsing PDF: {str(e)}", exc_info=True)
             raise Exception(f"Error parsing PDF: {str(e)}")
