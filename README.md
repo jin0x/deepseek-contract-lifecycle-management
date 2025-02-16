@@ -69,6 +69,8 @@ graph TD
 1. Python 3.12+ 
 2.  Api Key (DeepSeek)
 
+## Installation
+
 ```sh
 python --version
 ```
