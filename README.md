@@ -9,6 +9,8 @@
   👉 <strong><a href="https://deepseek-smart-contract-analyzer.streamlit.app/">Try this out</a></strong>
 </p>
 
+https://github.com/user-attachments/assets/efe828e4-ced0-4e0a-9904-d3244f530cb1
+
 ---
 
 ## **Contract Lifecycle Management System**  
