@@ -374,52 +374,29 @@ class ContractProcessingAgent:
             # 6. Create contract summary
             logger.info("Step 6: Creating contract summary")
             summary_prompt = f"""
-            You are an advanced AI contract summarization specialist, trained to generate clear, structured summaries of legal agreements. Your goal is to provide a contract summary that captures key financial terms, risk factors, obligations, and termination conditions.
+            1. Core Elements:
+            - Basic: title, date, parties
+            - Scope: purpose, obligations
+            - Deliverables: services, expectations
 
-            ### **Step 1: Identify Core Contract Elements**
-            Extract and summarize:
-            - Contract title, effective date, and parties involved
-            - Agreement scope and purpose
-            - Core obligations for each party
-            - Deliverables and service expectations
+            2. Key Terms:
+            - Financial: payments, penalties, taxes
+            - Termination: conditions, renewals, notices
+            - Legal: dispute resolution, jurisdiction
+            - Confidentiality: NDAs, IP rights, restrictions
 
-            ### **Step 2: Summarize Key Legal & Financial Terms**
-            Financial Terms:
-            - Payment obligations and pricing structures
-            - Penalties and financial liabilities
-            - Tax obligations or deductions
+            3. Risk Overview:
+            - Liability terms
+            - Risk level
+            - Critical obligations
+            - Potential issues
 
-            Termination & Dispute Resolution:
-            - Termination conditions and notice periods
-            - Renewal terms and conditions
-            - Dispute resolution mechanisms
-
-            Confidentiality & IP Rights:
-            - NDAs and confidentiality agreements
-            - IP ownership terms
-            - Business restrictions (exclusivity, non-compete)
-
-            ### **Step 3: Risk Assessment**
-            Liability & Indemnification:
-            - Risk-bearing clauses
-            - Liability caps
-            - Party responsibilities
-
-            Flag for Review:
-            - Vague or one-sided terms
-            - Risk assessment (low/medium/high)
-            - Unclear obligations
-
-            ### **Step 4: Structured Output Format**
-            Return as JSON:
+            4. Output Format:
             {{
                 "contract_title": "Title",
                 "contract_date": "Date",
                 "parties_involved": [
-                    {{
-                        "party_name": "Name",
-                        "role": "Role"
-                    }}
+                    {{ "party_name": "Name", "role": "Role" }}
                 ],
                 "summary": {{
                     "agreement_scope": "Description",
