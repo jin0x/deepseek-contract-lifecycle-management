@@ -68,8 +68,10 @@ graph TD
 
 ### What You'll Need
 
-1. Python 3.12+ 
-2.  Api Key (DeepSeek)
+1. OpenAI Api Key (All agents except clause classifier)
+2. DeepSeek Api key (Clause classifier agent )
+3. Python 3.12+ 
+
 
 ## Installation
 
