@@ -35,7 +35,7 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
-def chunk_text(text: str, chunk_size: int = 4000, overlap: int = 500) -> List[dict]:
+def chunk_text(text: str, chunk_size: int = 2000, overlap: int = 500) -> List[dict]:
     """Split text into overlapping chunks while preserving structural integrity.
 
     Args:

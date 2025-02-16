@@ -106,34 +106,45 @@ class ContractProcessingAgent:
         )
 
     def process_chunks(self, chunks: List[dict], processor_func: callable, prompt_template: str) -> List[dict]:
-        """Process text chunks through a specified agent function.
-
-        Args:
-            chunks (List[dict]): List of text chunks with metadata
-            processor_func: The agent function to process each chunk
-            prompt_template: The prompt template to use for processing
-
-        Returns:
-            List[dict]: List of processing results for each chunk
-        """
+        """Process text chunks with token limit handling."""
         results = []
+
         for chunk in chunks:
             try:
-                # Create chunk-specific prompt with correct variable names
+                # Create chunk-specific prompt
                 chunk_prompt = prompt_template.format(
-                    sequence_num=chunk['sequence'] + 1,  # Changed from chunk_num
+                    sequence_num=chunk['sequence'] + 1,
                     total_chunks=len(chunks),
                     text=chunk['text']
                 )
 
                 logger.info(f"Processing chunk {chunk['sequence'] + 1}/{len(chunks)}")
-                result = processor_func(chunk_prompt)
 
-                if hasattr(result, 'content'):
-                    result_data = result.content
-                else:
-                    result_data = result
+                try:
+                    result = processor_func(chunk_prompt)
+                except Exception as e:
+                    if "length limit was reached" in str(e):
+                        # If we hit token limit, split chunk further
+                        sub_chunks = chunk_text(chunk['text'], chunk_size=1000, overlap=100)
+                        sub_results = []
+                        for sub_chunk in sub_chunks:
+                            sub_prompt = prompt_template.format(
+                                sequence_num=f"{chunk['sequence'] + 1}.{sub_chunk['sequence'] + 1}",
+                                total_chunks=f"{len(chunks)}.{len(sub_chunks)}",
+                                text=sub_chunk['text']
+                            )
+                            sub_result = processor_func(sub_prompt)
+                            sub_results.append({
+                                'result': sub_result.content if hasattr(sub_result, 'content') else sub_result,
+                                'chunk_metadata': sub_chunk
+                            })
+                        # Combine sub-results
+                        results.extend(sub_results)
+                        continue
+                    else:
+                        raise
 
+                result_data = result.content if hasattr(result, 'content') else result
                 results.append({
                     'result': result_data,
                     'chunk_metadata': chunk
@@ -249,54 +260,21 @@ class ContractProcessingAgent:
             logger.info(f"Created {len(chunks)} chunks for processing")
 
             metadata_prompt = """
-            You are an advanced AI document parsing specialist. You are processing chunk {sequence_num} of {total_chunks}.
+            You are processing document chunk {sequence_num} of {total_chunks}.
 
-            **Step 1: Extract & Structure Contract Metadata**
-            Extract and structure contract metadata according to the `Contract` class format.
+            Extract the following from this chunk:
+            1. Contract Title (if present)
+            2. Contract Date (if present)
+            3. Parties Involved (name and role)
+            4. Key Clauses:
+            - Category
+            - Name
+            - Full text
+            - Any dates or amounts
 
-            - **Contract Title (`contract_title`)** → Extract the full contract title exactly as stated.
-            - **Contract Date (`contract_date`)** → Identify and extract the official start date of the agreement.
-            - **Parties Involved (`parties_involved`)**: Extract the name and role of each party in structured format:
-            - Example: `"party_name": "Company A", "role": "Service Provider"`
-            - Example: `"party_name": "Company B", "role": "Client"`
+            ⚠️ Flag any missing/unclear information.
 
-            ⚠️ If any metadata fields are missing, incomplete, or ambiguous, flag them:
-            - Example: `"warning": "Contract date missing—manual review needed."`
-
-            **Step 2: Extract & Structure Major Contract Sections**
-            Identify and extract key contract clauses, ensuring they align with the `Clause` class structure.
-
-            - **Clause Category (`clause_category`)** → Assign a general category based on the clause's legal function
-            - **Clause Name (`clause_name`)** → Extract the exact heading/title of the clause
-            - **Clause Text (`clause_text`)** → Extract the full clause content
-            - **Related Dates (`related_dates`)** → Leave blank unless a date is detected
-            - **Amounts (`amounts`)** → Leave blank unless a monetary value is detected
-            - **Metadata (`metadata`)**:
-            - `"confidence_score"`: AI confidence level for extracted text
-
-            ⚠️ Flag any issues encountered during clause extraction:
-            - `"warning": "Reference to Section 5—full text unavailable."`
-            - `"warning": "Clause may be incomplete—possible text truncation."`
-
-            **Step 3: Handle Formatting, OCR Issues & Error Detection**
-            Ensure document formatting remains clean and detect common errors.
-
-            - **OCR Issues:** Flag `"warning": "OCR issue detected—possible missing text."`
-            - **Section Numbering Errors:** Flag `"warning": "Clause numbering mismatch detected."`
-            - **Duplicate Clauses:** Flag `"warning": "Possible duplicate detected—review needed."`
-
-            **Step 4: Validate Processing & Error Handling**
-            Ensure structured contract output follows the `Contract` class format:
-
-            ✅ **Successful Parsing:**
-            - `"status": "success"`
-            - `"document": {{ structured contract output }}`
-
-            ❌ **Parsing Failure:**
-            - `"status": "failed"`
-            - `"error": "Contract could not be parsed due to format inconsistency."`
-
-            Text chunk to process: {text}
+            Text to analyze: {text}
             """
 
             metadata_results = self.process_chunks(
