@@ -131,8 +131,6 @@ class ContractProcessingAgent:
             logger.debug(f"Extracted text length: {len(text)}")
             # logger.debug(f"First 500 chars of text: {text[:500]}")
 
-            logger.info("🟣 PARTY SCHEMA: ", {json.dumps(party_schema, indent=2)})
-            logger.info("🟣 METADATA STRUCTURE: ", {json.dumps(metadata_structure, indent=2)})
 
             # Process the extracted text
             logger.info("Processing extracted text through contract pipeline")
@@ -203,46 +201,36 @@ class ContractProcessingAgent:
             logger.info("Step 2: Extracting clauses")
 
             clause_prompt = f"""
-            You are an advanced AI contract clause extraction specialist. Extract and structure clauses with:
+            Extract and structure clauses with:
 
-            1. Sequential Numbering:
-            - "clause": <number>  # Number each clause sequentially
+            1. Structure Requirements:
+            - clause: sequential number
+            - section_name: section header/name
+            - clause_text: complete text
+            - related_dates: [YYYY-MM-DD format]
+            - related_amounts: [monetary values with currency]
+            - metadata: {{ confidence_score: float 0-1 }}
 
-            2. Section Information:
-            - "section_name": <name>  # Extract section names/headers
-
-            3. Detailed Extraction:
-            - "clause_text": <full text>  # Complete clause text without truncation
-            - "related_dates": [<list of all dates found>]  # All dates mentioned in the clause
-            - "related_amounts": [<list of all monetary amounts>]  # All monetary values
-
-            4. Metadata:
-            - "metadata": {{
-                "confidence_score": <float between 0 and 1>,
-            }}
-
-            Output Format:
+            2. Output Format:
             {{
                 "clauses": [
                     {{
                         "clause": 1,
                         "section_name": "NATURE OF RELATIONSHIP",
-                        "clause_text": "Full text of the clause...",
-                        "related_dates": ["2025-03-01", "2025-04-01"],
-                        "related_amounts": ["$50,000", "$100,000"],
-                        "metadata": {{
-                            "confidence_score": 0.95,
-                        }}
+                        "clause_text": "...",
+                        "related_dates": ["2025-03-01"],
+                        "related_amounts": ["$50,000"],
+                        "metadata": {{ "confidence_score": 0.95 }}
                     }}
                 ]
             }}
 
-            Important Guidelines:
-            1. Preserve all original text formatting and numbering
-            2. Extract all dates in YYYY-MM-DD format when possible
-            3. Include all monetary amounts with currency symbols
-            4. Maintain section hierarchy and relationships
-            5. Flag any incomplete or ambiguous clauses
+            3. Guidelines:
+            - Preserve original formatting/numbering
+            - Use YYYY-MM-DD for dates
+            - Include currency symbols
+            - Maintain section hierarchy
+            - Flag incomplete/ambiguous clauses
 
             Text: {text}
             """
@@ -252,56 +240,39 @@ class ContractProcessingAgent:
             logger.debug(f"Clauses type: {type(clauses_result)}")
             logger.info(f"Clause extraction result: {clauses_result.content if hasattr(clauses_result, 'content') else clauses_result}")
 
-           # 3. Classify clauses
+            # 3. Classify clauses
             logger.info("Step 3: Classifying clauses")
 
             classification_prompt = f"""
-            You are an advanced AI contract clause classification specialist. Your task is to analyze and categorize contract clauses based on their legal purpose and function, ensuring standardization, consistency, and accuracy.
+            1. Legal Categories:
+            - Financial Terms: Payment, Fees, Compensation, Penalties
+            - Confidentiality & NDA: Data Protection, Trade Secrets, Non-Disclosure
+            - Termination & Breach: Exit Clauses, Rights, Auto-Renewals
+            - Indemnification & Liability: Risk Allocation, Damages
+            - Dispute Resolution: Arbitration, Mediation, Jurisdiction
+            - Rights & Restrictions: Ownership, IP, Licensing, Non-Compete
+            - Miscellaneous: Other clauses not fitting above categories
 
-            ### **Step 1: Analyze Clause Context & Determine Classification**
-            Classify each clause into one of the following predefined legal categories based on its content and function:
+            2. Classification Rules:
+            - Use primary function for multi-category clauses
+            - Label unclear clauses as "Miscellaneous"
+            - Preserve original text and structure
+            - Add warnings for uncertain classifications
 
-            - **Financial Terms** → (Payment Obligations, Fees, Compensation, Penalties, Late Payments)
-            - **Confidentiality & NDA** → (Data Protection, Trade Secrets, Non-Disclosure, Information Sharing)
-            - **Termination & Breach** → (Exit Clauses, Termination Rights, Auto-Renewals, Breach Consequences)
-            - **Indemnification & Liability** → (Risk Allocation, Damages, Legal Responsibilities)
-            - **Dispute Resolution & Governing Law** → (Arbitration, Mediation, Legal Jurisdiction, Governing Law)
-            - **Rights & Restrictions** → (Ownership, IP Rights, Exclusivity, Licensing, Non-Compete)
-            - **Miscellaneous** → (Catch-All for Clauses That Do Not Fit Clearly into the Above Categories)
-
-            ### **Step 2: Verify Classification Confidence & Handle Uncertainty**
-            ✅ **Accurate Classification:**
-            - If the clause explicitly states its category (e.g., "Payment Terms"), confirm it aligns with the extracted text.
-            - If multiple categories seem relevant, classify based on the **primary function** of the clause.
-
-            ✅ **Uncertain Classification:**
-            - If the AI **is unsure about a classification**, label it as `"Miscellaneous"` and **add a warning**.
-            - Example: `"warning": "Clause classification uncertain—manual review needed."`
-            - If a clause **contains multiple legal functions** (e.g., penalties + termination), return the **primary category** and **flag it for human review**.
-            - Example: `"warning": "Overlapping clause categories detected—review recommended."`
-
-            ### **Step 3: Ensure Legal Integrity & Formatting Consistency**
-            ✅ **Preserve Clause Formatting**
-            - Do **not alter or rephrase the clause text**—classification should be based on **legal function, not language style**.
-            - Maintain **section numbering and paragraph structure** to preserve context.
-
-            ✅ **Detect & Flag Misclassified Clauses**
-            - If a clause appears **misclassified based on content**, return:
-            - Example: `"warning": "Potential misclassification—manual verification recommended."`
-            - If a clause **does not match any category**, assign `"Miscellaneous"` and provide an explanation.
-
-            ### **Step 4: Validate Classification & Handle Errors**
-            ✅ **If Classification is Successful, Return:**
-            - `"status": "success"`
-            - `"document": {{ structured clause classification output }}`
-
-            ❌ **If Classification Fails (Unclear or Incomplete Clause), Return:**
-            - `"status": "failed"`
-            - `"error": "Clause classification failed due to ambiguous content."`
-
-            ⚠️ **Additional Warnings for Edge Cases:**
-            - `"warning": "Clause category inferred based on context—review recommended."`
-            - `"warning": "Clause references external section—full classification may be incomplete."`
+            3. Output Format:
+            {{
+                "status": "success|failed",
+                "document": {{
+                    "clauses": [
+                        {{
+                            "clause_category": "category_name",
+                            "clause_text": "original_text",
+                            "warning": "optional_warning_message"
+                        }}
+                    ]
+                }},
+                "error": "error_message_if_failed"
+            }}
 
             Input Clauses: {clauses_result.content}
             """
