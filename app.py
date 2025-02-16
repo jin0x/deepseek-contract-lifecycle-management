@@ -1,5 +1,3 @@
-import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 from pathlib import Path
 from agents.contract_processor import ContractProcessingAgent
@@ -12,11 +10,12 @@ from utils.helpers import get_logger
 
 logger = get_logger(__name__)
 
-
 def init_session_state():
     """Initialize session state variables"""
     if 'openai_api_key' not in st.session_state:
         st.session_state.openai_api_key = None
+    if 'deepseek_api_key' not in st.session_state:  # Add this
+        st.session_state.deepseek_api_key = None
     if 'processor' not in st.session_state:
         st.session_state.processor = None
 
@@ -42,23 +41,34 @@ def main():
         st.image("contract_img.png", width=150)
         st.markdown("## ⚙️ Configuration")
 
-        api_key = st.text_input(
+        openai_api_key = st.text_input(
             "OpenAI API Key",
             type="password",
             value=st.session_state.openai_api_key if st.session_state.openai_api_key else "",
             help="Enter your OpenAI API key"
         )
 
-        if api_key:
-            st.session_state.openai_api_key = api_key
+        deepseek_api_key = st.text_input(  # Add this
+            "DeepSeek API Key",
+            type="password",
+            value=st.session_state.deepseek_api_key if st.session_state.deepseek_api_key else "",
+            help="Enter your DeepSeek API key"
+        )
+
+        if openai_api_key and deepseek_api_key:
+            st.session_state.openai_api_key = openai_api_key
+            st.session_state.deepseek_api_key = deepseek_api_key
             if not st.session_state.processor:
                 try:
-                    st.session_state.processor = ContractProcessingAgent(api_key=api_key)
-                    st.success("✅ API Connected Successfully")
+                    st.session_state.processor = ContractProcessingAgent(
+                        openai_api_key=openai_api_key,
+                        deepseek_api_key=deepseek_api_key
+                    )
+                    st.success("✅ APIs Connected Successfully")
                 except Exception as e:
                     st.error(f"❌ Connection Failed: {str(e)}")
         else:
-            st.warning("🔑 API Key Required")
+            st.warning("🔑 API Keys Required")
 
     # Main content
     st.markdown("# 📑 Smart Contract Analyzer")
