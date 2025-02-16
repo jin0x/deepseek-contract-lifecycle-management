@@ -1,12 +1,25 @@
 from pathlib import Path
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
-from models import Contract, ProcessingResponse, Clause
+from models import Contract, ProcessingResponse, Clause, Party
 from utils.pdf_parser import PDFParser
 from utils.helpers import get_logger
 import json
 
+
+
 logger = get_logger(__name__)
+
+# Get the schema for expected output
+contract_schema = Contract.model_json_schema()
+party_schema = Party.model_json_schema()
+
+# Create a sample structure with only the metadata-relevant fields
+metadata_structure = {
+    "contract_title": contract_schema["properties"]["contract_title"],
+    "contract_date": contract_schema["properties"]["contract_date"],
+    "parties_involved": contract_schema["properties"]["parties_involved"]
+}
 
 class ContractProcessingAgent:
     def __init__(self, api_key: str):
@@ -116,7 +129,8 @@ class ContractProcessingAgent:
             logger.info("Extracting text from PDF")
             text = self.pdf_parser.parse_pdf(pdf_path)
             logger.debug(f"Extracted text length: {len(text)}")
-            logger.debug(f"First 500 chars of text: {text[:500]}")
+            # logger.debug(f"First 500 chars of text: {text[:500]}")
+
 
             # Process the extracted text
             logger.info("Processing extracted text through contract pipeline")
@@ -142,62 +156,35 @@ class ContractProcessingAgent:
             ProcessingResponse: Processing result with either the structured contract data or error
         """
         try:
-           # 1. Extract and structure contract metadata
+            # 1. Extract and structure contract metadata
             logger.info("Step 1: Extracting contract metadata")
             metadata_prompt = f"""
-            You are an advanced AI document parsing specialist. Your task is to accurately extract contract metadata, structure clauses for processing, and flag potential issues while preserving legal integrity.
+            AI Document Parser: Extract contract metadata and structure with prescribed format.
 
-            **Step 1: Extract & Structure Contract Metadata**
-            Extract and structure contract metadata according to the `Contract` class format.
+            1. Extract Contract Metadata:
+            - Title: Full contract title (exact)
+            - Date: Official start date
+            - Parties: Extract name and role for each party
+            Format: {{"party_name": "Company A", "role": "Service Provider"}}
 
-            - **Contract Title (`contract_title`)** → Extract the full contract title exactly as stated.
-            - **Contract Date (`contract_date`)** → Identify and extract the official start date of the agreement.
-            - **Parties Involved (`parties_involved`)**: Extract the name and role of each party in structured format:
-            - Example: `"party_name": "Company A", "role": "Service Provider"`
-            - Example: `"party_name": "Company B", "role": "Client"`
+            2. Extract Major Sections:
+            - Category: Legal function (Financial, Termination, etc.)
+            - Name: Exact heading/title
+            - Text: Full clause content
+            - Dates: Leave for NER processing
+            - Amounts: Leave for NER processing
+            - Metadata: Include confidence score
 
-            ⚠️ If any metadata fields are missing, incomplete, or ambiguous, flag them:
-            - Example: `"warning": "Contract date missing—manual review needed."`
+            3. Output Requirements:
+            ✓ Success Format:
+            - "status": "success"
+            - "document": {{ structured contract output }}
 
-            **Step 2: Extract & Structure Major Contract Sections**
-            Identify and extract key contract clauses, ensuring they align with the `Clause` class structure.
+            ✗ Error Format:
+            - "status": "failed"
+            - "error": "Specific error message"
 
-            - **Clause Category (`clause_category`)** → Assign a general category based on the clause's legal function (e.g., Financial Terms, Termination, Confidentiality).
-            - **Clause Name (`clause_name`)** → Extract the exact heading/title of the clause.
-            - **Clause Text (`clause_text`)** → Extract the full clause content without truncation.
-            - **Related Dates (`related_dates`)** → Leave blank unless a date is detected (NER will handle this).
-            - **Amounts (`amounts`)** → Leave blank unless a monetary value is detected (NER will handle this).
-            - **Metadata (`metadata`)**:
-            - `"confidence_score"`: AI confidence level for extracted text.
-
-            ⚠️ Flag any issues encountered during clause extraction:
-            - `"warning": "Reference to Section 5—full text unavailable."` (Cross-referenced but missing details).
-            - `"warning": "Clause may be incomplete—possible text truncation."` (Potential missing content).
-
-            **Step 3: Handle Formatting, OCR Issues & Error Detection**
-            Ensure document formatting remains clean and detect common errors.
-
-            - **OCR Issues:** If text quality is poor, flag `"warning": "OCR issue detected—possible missing text."`
-            - **Section Numbering Errors:** If clause numbers are inconsistent, flag `"warning": "Clause numbering mismatch detected."`
-            - **Duplicate Clauses:** If similar clauses appear multiple times, flag `"warning": "Possible duplicate detected—review needed."`
-
-            **Step 4: Validate Processing & Error Handling**
-            Ensure structured contract output follows the `Contract` class format:
-
-            ✅ **Successful Parsing:**
-            - `"status": "success"`
-            - `"document": {{ structured contract output }}`
-
-            ❌ **Parsing Failure (If structure is inconsistent):**
-            - `"status": "failed"`
-            - `"error": "Contract could not be parsed due to format inconsistency."`
-
-            **Final Execution Guidelines for AI**
-            ✅ Extract all contract metadata and structure it properly.
-            ✅ Ensure clauses align with predefined legal categories.
-            ✅ Prepare placeholders for NER processing (dates, amounts).
-            ✅ Detect and flag formatting errors, missing data, or inconsistencies.
-            ✅ Ensure structured output follows `Contract` and `ProcessingResponse` models.
+            Flag any missing/unclear data with "warning" field.
 
             Text: {text}
             """
@@ -214,46 +201,36 @@ class ContractProcessingAgent:
             logger.info("Step 2: Extracting clauses")
 
             clause_prompt = f"""
-            You are an advanced AI contract clause extraction specialist. Extract and structure clauses with:
+            Extract and structure clauses with:
 
-            1. Sequential Numbering:
-            - "clause": <number>  # Number each clause sequentially
+            1. Structure Requirements:
+            - clause: sequential number
+            - section_name: section header/name
+            - clause_text: complete text
+            - related_dates: [YYYY-MM-DD format]
+            - related_amounts: [monetary values with currency]
+            - metadata: {{ confidence_score: float 0-1 }}
 
-            2. Section Information:
-            - "section_name": <name>  # Extract section names/headers
-
-            3. Detailed Extraction:
-            - "clause_text": <full text>  # Complete clause text without truncation
-            - "related_dates": [<list of all dates found>]  # All dates mentioned in the clause
-            - "related_amounts": [<list of all monetary amounts>]  # All monetary values
-
-            4. Metadata:
-            - "metadata": {{
-                "confidence_score": <float between 0 and 1>,
-            }}
-
-            Output Format:
+            2. Output Format:
             {{
                 "clauses": [
                     {{
                         "clause": 1,
                         "section_name": "NATURE OF RELATIONSHIP",
-                        "clause_text": "Full text of the clause...",
-                        "related_dates": ["2025-03-01", "2025-04-01"],
-                        "related_amounts": ["$50,000", "$100,000"],
-                        "metadata": {{
-                            "confidence_score": 0.95,
-                        }}
+                        "clause_text": "...",
+                        "related_dates": ["2025-03-01"],
+                        "related_amounts": ["$50,000"],
+                        "metadata": {{ "confidence_score": 0.95 }}
                     }}
                 ]
             }}
 
-            Important Guidelines:
-            1. Preserve all original text formatting and numbering
-            2. Extract all dates in YYYY-MM-DD format when possible
-            3. Include all monetary amounts with currency symbols
-            4. Maintain section hierarchy and relationships
-            5. Flag any incomplete or ambiguous clauses
+            3. Guidelines:
+            - Preserve original formatting/numbering
+            - Use YYYY-MM-DD for dates
+            - Include currency symbols
+            - Maintain section hierarchy
+            - Flag incomplete/ambiguous clauses
 
             Text: {text}
             """
@@ -263,56 +240,39 @@ class ContractProcessingAgent:
             logger.debug(f"Clauses type: {type(clauses_result)}")
             logger.info(f"Clause extraction result: {clauses_result.content if hasattr(clauses_result, 'content') else clauses_result}")
 
-           # 3. Classify clauses
+            # 3. Classify clauses
             logger.info("Step 3: Classifying clauses")
 
             classification_prompt = f"""
-            You are an advanced AI contract clause classification specialist. Your task is to analyze and categorize contract clauses based on their legal purpose and function, ensuring standardization, consistency, and accuracy.
+            1. Legal Categories:
+            - Financial Terms: Payment, Fees, Compensation, Penalties
+            - Confidentiality & NDA: Data Protection, Trade Secrets, Non-Disclosure
+            - Termination & Breach: Exit Clauses, Rights, Auto-Renewals
+            - Indemnification & Liability: Risk Allocation, Damages
+            - Dispute Resolution: Arbitration, Mediation, Jurisdiction
+            - Rights & Restrictions: Ownership, IP, Licensing, Non-Compete
+            - Miscellaneous: Other clauses not fitting above categories
 
-            ### **Step 1: Analyze Clause Context & Determine Classification**
-            Classify each clause into one of the following predefined legal categories based on its content and function:
+            2. Classification Rules:
+            - Use primary function for multi-category clauses
+            - Label unclear clauses as "Miscellaneous"
+            - Preserve original text and structure
+            - Add warnings for uncertain classifications
 
-            - **Financial Terms** → (Payment Obligations, Fees, Compensation, Penalties, Late Payments)
-            - **Confidentiality & NDA** → (Data Protection, Trade Secrets, Non-Disclosure, Information Sharing)
-            - **Termination & Breach** → (Exit Clauses, Termination Rights, Auto-Renewals, Breach Consequences)
-            - **Indemnification & Liability** → (Risk Allocation, Damages, Legal Responsibilities)
-            - **Dispute Resolution & Governing Law** → (Arbitration, Mediation, Legal Jurisdiction, Governing Law)
-            - **Rights & Restrictions** → (Ownership, IP Rights, Exclusivity, Licensing, Non-Compete)
-            - **Miscellaneous** → (Catch-All for Clauses That Do Not Fit Clearly into the Above Categories)
-
-            ### **Step 2: Verify Classification Confidence & Handle Uncertainty**
-            ✅ **Accurate Classification:**
-            - If the clause explicitly states its category (e.g., "Payment Terms"), confirm it aligns with the extracted text.
-            - If multiple categories seem relevant, classify based on the **primary function** of the clause.
-
-            ✅ **Uncertain Classification:**
-            - If the AI **is unsure about a classification**, label it as `"Miscellaneous"` and **add a warning**.
-            - Example: `"warning": "Clause classification uncertain—manual review needed."`
-            - If a clause **contains multiple legal functions** (e.g., penalties + termination), return the **primary category** and **flag it for human review**.
-            - Example: `"warning": "Overlapping clause categories detected—review recommended."`
-
-            ### **Step 3: Ensure Legal Integrity & Formatting Consistency**
-            ✅ **Preserve Clause Formatting**
-            - Do **not alter or rephrase the clause text**—classification should be based on **legal function, not language style**.
-            - Maintain **section numbering and paragraph structure** to preserve context.
-
-            ✅ **Detect & Flag Misclassified Clauses**
-            - If a clause appears **misclassified based on content**, return:
-            - Example: `"warning": "Potential misclassification—manual verification recommended."`
-            - If a clause **does not match any category**, assign `"Miscellaneous"` and provide an explanation.
-
-            ### **Step 4: Validate Classification & Handle Errors**
-            ✅ **If Classification is Successful, Return:**
-            - `"status": "success"`
-            - `"document": {{ structured clause classification output }}`
-
-            ❌ **If Classification Fails (Unclear or Incomplete Clause), Return:**
-            - `"status": "failed"`
-            - `"error": "Clause classification failed due to ambiguous content."`
-
-            ⚠️ **Additional Warnings for Edge Cases:**
-            - `"warning": "Clause category inferred based on context—review recommended."`
-            - `"warning": "Clause references external section—full classification may be incomplete."`
+            3. Output Format:
+            {{
+                "status": "success|failed",
+                "document": {{
+                    "clauses": [
+                        {{
+                            "clause_category": "category_name",
+                            "clause_text": "original_text",
+                            "warning": "optional_warning_message"
+                        }}
+                    ]
+                }},
+                "error": "error_message_if_failed"
+            }}
 
             Input Clauses: {clauses_result.content}
             """
@@ -321,46 +281,46 @@ class ContractProcessingAgent:
             logger.info(f"Classification result: {classified_clauses.content if hasattr(classified_clauses, 'content') else classified_clauses}")
 
 
-           # 4. Extract entities from each clause
+            # 4. Extract entities from each clause
             logger.info("Step 4: Extracting named entities")
 
             ner_prompt = f"""
-            You are an advanced AI Named Entity Recognition (NER) specialist for legal contracts. Your role is to extract and structure key legal entities, ensuring precision and reliability.
+            1. Entity Extraction Requirements:
+            - Dates (related_dates):
+            * Contract dates, deadlines, renewals
+            * Convert relative to explicit dates
+            * Format: ["YYYY-MM-DD"]
 
-            For each clause, extract and return the following:
-            - **Dates (`related_dates`)**: Identify contract start dates, payment deadlines, renewal periods, and any other date references.
-            - Convert relative dates (e.g., "payment due in 30 days") into explicit values where possible.
-            - Example: "related_dates": ["2025-03-01"]
-            - If a date reference is unclear or missing, flag it for review.
-                - Example: "warning": "Contract date reference unclear—manual review needed."
+            - Amounts (amounts):
+            * Financial values with currency
+            * Include percentages and fees
+            * Format: ["$10,000", "2%"]
 
-            - **Monetary Amounts (`amounts`)**: Identify all financial values (e.g., "$50,000", "2% penalty fee").
-            - Ensure extracted amounts retain their correct currency symbols.
-            - Example: "amounts": ["$10,000"]
-            - If an amount lacks clarity or context, flag it.
-                - Example: "warning": "Potential misclassification—amount reference unclear."
-
-            - **Contracting Parties (`parties_involved`)**: Identify all named parties and their roles.
-            - Ensure role consistency with metadata.
-            - Example:
-                "parties_involved": [
-                    {{
-                        "party_name": "ABC Corp",
-                        "role": "Service Provider"
-                    }},
-                    {{
-                        "party_name": "XYZ Ltd",
-                        "role": "Client"
-                    }}
+            - Parties (parties_involved):
+            * Names and roles
+            * Format: [
+                {{ "party_name": "ABC Corp", "role": "Provider" }}
                 ]
-            - If a party's role is unclear, flag it.
-                - Example: "warning": "Unclear entity reference—requires verification."
 
-            - **Governing Law & Jurisdiction**: Identify any legal jurisdiction references.
-            - If multiple legal jurisdictions are detected, flag them for review.
-            - Example: "warning": "Multiple jurisdictions detected—review required."
+            - Jurisdiction:
+            * Legal jurisdiction references
+            * Flag multiple jurisdictions
 
-            Ensure extracted values match the contract's references and flag unclear cases with appropriate warnings. The output structure must align with the expected Clause class format.
+            2. Output Format:
+            {{
+                "related_dates": ["2025-03-01"],
+                "amounts": ["$50,000"],
+                "parties_involved": [
+                    {{ "party_name": "Name", "role": "Role" }}
+                ],
+                "warning": "optional_warning_message"
+            }}
+
+            3. Warning Cases:
+            - Unclear dates/amounts
+            - Ambiguous party roles
+            - Multiple jurisdictions
+            - Missing required data
 
             Input Clauses: {classified_clauses.content}
             """
@@ -372,34 +332,36 @@ class ContractProcessingAgent:
             # 5. Generate alternative clauses (optional)
             logger.info("Step 5: Generating alternative clauses")
             generation_prompt = f"""
-            You are an advanced AI legal contract assistant specializing in contract clause enhancement. Your task is to improve existing contract clauses by ensuring clarity, legal robustness, and compliance while preserving the intended meaning.
+            1. Enhancement Requirements:
+            - Preserve legal intent
+            - Remove ambiguity/redundancy
+            - Ensure term definitions
+            - Validate external references
 
-            ### **Step 1: Analyze Input Clause**
-            - Understand the legal intent of the clause within the contract
-            - Identify ambiguities, redundant phrasing, or vague legal language
-            - Ensure that all financial, confidentiality, and liability clauses are well-defined
-            - Flag any references to external sections (e.g., "as per Section 5") that lack details
+            2. Improvement Guidelines:
+            - Make terms explicit
+            - Use legally binding language
+            - Simplify without losing accuracy
+            - Maintain document consistency
 
-            ### **Step 2: Improve Clause Wording**
-            - Enhance clarity by making terms explicit and reducing ambiguity
-            - Strengthen legal enforceability by ensuring legally binding phrasing
-            - Simplify complex wording while maintaining legal accuracy
-            - Ensure definitions of key terms are clear (e.g., jurisdiction, obligations, liabilities)
-
-            ### **Step 3: Validate Legal Compliance & Precision**
-            - Ensure compliance with standard legal best practices
-            - Maintain contractual intent while improving structure
-            - Confirm that revised clauses integrate seamlessly into the document
-            - If a clause is already optimal, return it as-is with a justification
-
-            ### **Step 4: Structured Output Format**
-            For each clause, return:
+            3. Output Format:
             {{
-                "clause_category": "Category",
-                "original_clause_text": "Original text",
-                "improved_clause_text": "Improved version",
-                "modification_reason": "Explanation of changes or why no changes needed"
+                "clauses": [
+                    {{
+                        "clause_category": "Category",
+                        "original_clause_text": "Original",
+                        "improved_clause_text": "Enhanced",
+                        "modification_reason": "Change explanation",
+                        "warning": "optional_warning"
+                    }}
+                ]
             }}
+
+            4. Special Cases:
+            - Return optimal clauses as-is with justification
+            - Flag unclear external references
+            - Note undefined terms
+            - Mark ambiguous improvements
 
             Input Clauses: {enriched_clauses.content}
             """
@@ -412,52 +374,29 @@ class ContractProcessingAgent:
             # 6. Create contract summary
             logger.info("Step 6: Creating contract summary")
             summary_prompt = f"""
-            You are an advanced AI contract summarization specialist, trained to generate clear, structured summaries of legal agreements. Your goal is to provide a contract summary that captures key financial terms, risk factors, obligations, and termination conditions.
+            1. Core Elements:
+            - Basic: title, date, parties
+            - Scope: purpose, obligations
+            - Deliverables: services, expectations
 
-            ### **Step 1: Identify Core Contract Elements**
-            Extract and summarize:
-            - Contract title, effective date, and parties involved
-            - Agreement scope and purpose
-            - Core obligations for each party
-            - Deliverables and service expectations
+            2. Key Terms:
+            - Financial: payments, penalties, taxes
+            - Termination: conditions, renewals, notices
+            - Legal: dispute resolution, jurisdiction
+            - Confidentiality: NDAs, IP rights, restrictions
 
-            ### **Step 2: Summarize Key Legal & Financial Terms**
-            Financial Terms:
-            - Payment obligations and pricing structures
-            - Penalties and financial liabilities
-            - Tax obligations or deductions
+            3. Risk Overview:
+            - Liability terms
+            - Risk level
+            - Critical obligations
+            - Potential issues
 
-            Termination & Dispute Resolution:
-            - Termination conditions and notice periods
-            - Renewal terms and conditions
-            - Dispute resolution mechanisms
-
-            Confidentiality & IP Rights:
-            - NDAs and confidentiality agreements
-            - IP ownership terms
-            - Business restrictions (exclusivity, non-compete)
-
-            ### **Step 3: Risk Assessment**
-            Liability & Indemnification:
-            - Risk-bearing clauses
-            - Liability caps
-            - Party responsibilities
-
-            Flag for Review:
-            - Vague or one-sided terms
-            - Risk assessment (low/medium/high)
-            - Unclear obligations
-
-            ### **Step 4: Structured Output Format**
-            Return as JSON:
+            4. Output Format:
             {{
                 "contract_title": "Title",
                 "contract_date": "Date",
                 "parties_involved": [
-                    {{
-                        "party_name": "Name",
-                        "role": "Role"
-                    }}
+                    {{ "party_name": "Name", "role": "Role" }}
                 ],
                 "summary": {{
                     "agreement_scope": "Description",
