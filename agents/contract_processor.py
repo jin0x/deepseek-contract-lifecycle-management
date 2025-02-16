@@ -1,37 +1,50 @@
 from pathlib import Path
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
-from models import Contract, ProcessingResponse, Clause, Party
+from agno.models.deepseek import DeepSeek
+from models import Contract, ProcessingResponse, Clause
 from utils.pdf_parser import PDFParser
 from utils.helpers import get_logger
 import json
 
-
-
 logger = get_logger(__name__)
 
-# Get the schema for expected output
-contract_schema = Contract.model_json_schema()
-party_schema = Party.model_json_schema()
-
-# Create a sample structure with only the metadata-relevant fields
-metadata_structure = {
-    "contract_title": contract_schema["properties"]["contract_title"],
-    "contract_date": contract_schema["properties"]["contract_date"],
-    "parties_involved": contract_schema["properties"]["parties_involved"]
-}
+class CustomDeepSeek(DeepSeek):
+    def process_response(self, response: str) -> str:
+        """Clean markdown formatting from response"""
+        if response.startswith('```'):
+            lines = response.split('\n')
+            content = '\n'.join(lines[1:-1])
+            if content.startswith('json'):
+                content = content[4:]
+            return content.strip()
+        return response
 
 class ContractProcessingAgent:
-    def __init__(self, api_key: str):
+    def __init__(self, openai_api_key: str, deepseek_api_key: str):
         self.pdf_parser = PDFParser()
+
+        # OpenAI configuration for heavy processing
+        openai_config = OpenAIChat(
+            id="gpt-4o",
+            api_key=openai_api_key,
+            temperature=0.0
+        )
+
+        # DeepSeek configuration for lighter tasks
+        deepseek_config = CustomDeepSeek(
+            id="deepseek-chat",
+            base_url="https://api.aimlapi.com/v1",
+            api_key=deepseek_api_key,
+            response_format={"type": "json"}
+        )
 
         # Document Parsing Agent
         self.parsing_agent = Agent(
             name="Document Parser",
             role="Document parsing specialist",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=openai_config,
             instructions=["Extract contract metadata and structure"],
-            markdown=True,
             show_tool_calls=True,
             response_model=Contract,
             structured_outputs=True,
@@ -41,9 +54,8 @@ class ContractProcessingAgent:
         self.clause_agent = Agent(
             name="Clause Extractor",
             role="Contract clause extraction specialist",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=openai_config,
             instructions=["Identify and extract individual contract clauses"],
-            markdown=True,
             show_tool_calls=True,
             response_model=Clause,
             structured_outputs=True,
@@ -53,9 +65,8 @@ class ContractProcessingAgent:
         self.classification_agent = Agent(
             name="Clause Classifier",
             role="Contract clause classification specialist",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=deepseek_config,
             instructions=["Classify contract clauses into standard categories"],
-            markdown=True,
             show_tool_calls=True,
             response_model=Clause,
             structured_outputs=True,
@@ -65,9 +76,8 @@ class ContractProcessingAgent:
         self.ner_agent = Agent(
             name="NER Processor",
             role="Named Entity Recognition specialist",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=openai_config,
             instructions=["Extract dates, amounts, and named entities from clauses"],
-            markdown=True,
             show_tool_calls=True,
             response_model=Clause,
             structured_outputs=True,
@@ -77,9 +87,8 @@ class ContractProcessingAgent:
         self.generation_agent = Agent(
             name="Clause Generator",
             role="Contract clause improvement specialist",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=openai_config,
             instructions=["Generate improved versions of contract clauses"],
-            markdown=True,
             show_tool_calls=True,
             response_model=Clause,
             structured_outputs=True
@@ -89,9 +98,8 @@ class ContractProcessingAgent:
         self.summary_agent = Agent(
             name="Contract Summarizer",
             role="Contract summarization specialist",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=openai_config,
             instructions=["Create concise summaries of full contracts"],
-            markdown=True,
             show_tool_calls=True,
             response_model=Contract,
             structured_outputs=True
@@ -101,7 +109,7 @@ class ContractProcessingAgent:
         self.agent_team = Agent(
             name="Contract Processing Team",
             role="Contract analysis coordination",
-            model=OpenAIChat(id="gpt-4o", api_key=api_key),
+            model=openai_config,
             team=[
                 self.parsing_agent,
                 self.clause_agent,
@@ -111,7 +119,6 @@ class ContractProcessingAgent:
                 self.summary_agent
             ],
             instructions=["Coordinate contract analysis workflow"],
-            markdown=True,
             show_tool_calls=True,
             response_model=ProcessingResponse,
             structured_outputs=True
@@ -244,6 +251,19 @@ class ContractProcessingAgent:
             logger.info("Step 3: Classifying clauses")
 
             classification_prompt = f"""
+            IMPORTANT: Return pure JSON matching exactly this structure:
+            {{
+                "clause_category": "string",
+                "clause_name": "string",
+                "section_name": "string",
+                "clause_text": "string",
+                "related_dates": ["string"],
+                "related_amounts": ["string"],
+                "metadata": {{
+                    "confidence_score": 0.95
+                }}
+            }}
+
             1. Legal Categories:
             - Financial Terms: Payment, Fees, Compensation, Penalties
             - Confidentiality & NDA: Data Protection, Trade Secrets, Non-Disclosure
@@ -259,22 +279,8 @@ class ContractProcessingAgent:
             - Preserve original text and structure
             - Add warnings for uncertain classifications
 
-            3. Output Format:
-            {{
-                "status": "success|failed",
-                "document": {{
-                    "clauses": [
-                        {{
-                            "clause_category": "category_name",
-                            "clause_text": "original_text",
-                            "warning": "optional_warning_message"
-                        }}
-                    ]
-                }},
-                "error": "error_message_if_failed"
-            }}
-
             Input Clauses: {clauses_result.content}
+            FINAL REMINDER: Return only the JSON object, no markdown, no code blocks.
             """
 
             classified_clauses = self.classification_agent.run(classification_prompt)
