@@ -2,10 +2,9 @@ from pathlib import Path
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 from agno.models.deepseek import DeepSeek
-from agno.document.chunking.document import DocumentChunking
 from models import Contract, ProcessingResponse, Clause
 from utils.pdf_parser import PDFParser
-from utils.helpers import get_logger
+from utils.helpers import get_logger, chunk_text
 import json
 
 logger = get_logger(__name__)
@@ -153,17 +152,6 @@ class ContractProcessingAgent:
 
             # 1. Extract and structure contract metadata
             logger.info("Step 1: Extracting contract metadata")
-
-            # Initialize document chunking
-            chunking_strategy = DocumentChunking(
-                chunk_size=3000,  # Setting smaller than default to stay within DeepSeek limits
-                overlap=200       # For context preservation
-            )
-
-            # Split text into chunks
-            chunks = chunking_strategy.split(text)
-            logger.info(f"Split into {len(chunks)} chunks")
-
 
             metadata_prompt = f"""
             You are an advanced AI document parsing specialist. Your task is to accurately extract contract metadata, structure clauses for processing, and flag potential issues while preserving legal integrity.
