@@ -285,42 +285,42 @@ class ContractProcessingAgent:
             logger.info("Step 4: Extracting named entities")
 
             ner_prompt = f"""
-            You are an advanced AI Named Entity Recognition (NER) specialist for legal contracts. Your role is to extract and structure key legal entities, ensuring precision and reliability.
+            1. Entity Extraction Requirements:
+            - Dates (related_dates):
+            * Contract dates, deadlines, renewals
+            * Convert relative to explicit dates
+            * Format: ["YYYY-MM-DD"]
 
-            For each clause, extract and return the following:
-            - **Dates (`related_dates`)**: Identify contract start dates, payment deadlines, renewal periods, and any other date references.
-            - Convert relative dates (e.g., "payment due in 30 days") into explicit values where possible.
-            - Example: "related_dates": ["2025-03-01"]
-            - If a date reference is unclear or missing, flag it for review.
-                - Example: "warning": "Contract date reference unclear—manual review needed."
+            - Amounts (amounts):
+            * Financial values with currency
+            * Include percentages and fees
+            * Format: ["$10,000", "2%"]
 
-            - **Monetary Amounts (`amounts`)**: Identify all financial values (e.g., "$50,000", "2% penalty fee").
-            - Ensure extracted amounts retain their correct currency symbols.
-            - Example: "amounts": ["$10,000"]
-            - If an amount lacks clarity or context, flag it.
-                - Example: "warning": "Potential misclassification—amount reference unclear."
-
-            - **Contracting Parties (`parties_involved`)**: Identify all named parties and their roles.
-            - Ensure role consistency with metadata.
-            - Example:
-                "parties_involved": [
-                    {{
-                        "party_name": "ABC Corp",
-                        "role": "Service Provider"
-                    }},
-                    {{
-                        "party_name": "XYZ Ltd",
-                        "role": "Client"
-                    }}
+            - Parties (parties_involved):
+            * Names and roles
+            * Format: [
+                {{ "party_name": "ABC Corp", "role": "Provider" }}
                 ]
-            - If a party's role is unclear, flag it.
-                - Example: "warning": "Unclear entity reference—requires verification."
 
-            - **Governing Law & Jurisdiction**: Identify any legal jurisdiction references.
-            - If multiple legal jurisdictions are detected, flag them for review.
-            - Example: "warning": "Multiple jurisdictions detected—review required."
+            - Jurisdiction:
+            * Legal jurisdiction references
+            * Flag multiple jurisdictions
 
-            Ensure extracted values match the contract's references and flag unclear cases with appropriate warnings. The output structure must align with the expected Clause class format.
+            2. Output Format:
+            {{
+                "related_dates": ["2025-03-01"],
+                "amounts": ["$50,000"],
+                "parties_involved": [
+                    {{ "party_name": "Name", "role": "Role" }}
+                ],
+                "warning": "optional_warning_message"
+            }}
+
+            3. Warning Cases:
+            - Unclear dates/amounts
+            - Ambiguous party roles
+            - Multiple jurisdictions
+            - Missing required data
 
             Input Clauses: {classified_clauses.content}
             """
