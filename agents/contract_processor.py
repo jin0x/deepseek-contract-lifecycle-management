@@ -1,8 +1,8 @@
 from pathlib import Path
 from agno.agent import Agent
-from agno.models.openai import OpenAIChat
 from agno.models.deepseek import DeepSeek
 from models import Contract, ProcessingResponse, Clause
+from typing import List
 from utils.pdf_parser import PDFParser
 from utils.helpers import get_logger, chunk_text
 import json
@@ -105,6 +105,99 @@ class ContractProcessingAgent:
             structured_outputs=True
         )
 
+    def process_chunks(self, chunks: List[dict], processor_func: callable, prompt_template: str) -> List[dict]:
+        """Process text chunks through a specified agent function.
+
+        Args:
+            chunks (List[dict]): List of text chunks with metadata
+            processor_func: The agent function to process each chunk
+            prompt_template: The prompt template to use for processing
+
+        Returns:
+            List[dict]: List of processing results for each chunk
+        """
+        results = []
+        for chunk in chunks:
+            try:
+                # Create chunk-specific prompt with correct variable names
+                chunk_prompt = prompt_template.format(
+                    sequence_num=chunk['sequence'] + 1,  # Changed from chunk_num
+                    total_chunks=len(chunks),
+                    text=chunk['text']
+                )
+
+                logger.info(f"Processing chunk {chunk['sequence'] + 1}/{len(chunks)}")
+                result = processor_func(chunk_prompt)
+
+                if hasattr(result, 'content'):
+                    result_data = result.content
+                else:
+                    result_data = result
+
+                results.append({
+                    'result': result_data,
+                    'chunk_metadata': chunk
+                })
+
+            except Exception as e:
+                logger.error(f"Error processing chunk {chunk['sequence']}: {str(e)}")
+                raise
+
+        return results
+
+    def combine_metadata_results(self, chunk_results: List[dict]) -> dict:
+        """Combine metadata results from multiple chunks into a single coherent result.
+
+        Args:
+            chunk_results (List[dict]): Results from processing each chunk
+
+        Returns:
+            dict: Combined metadata
+        """
+        combined = {
+            'contract_title': None,
+            'contract_date': None,
+            'parties_involved': set(),
+            'clauses': [],
+            'amounts': set()
+        }
+
+        for chunk_result in chunk_results:
+            result = chunk_result['result']
+
+            # Extract contract title from first chunk that has it
+            if not combined['contract_title'] and hasattr(result, 'contract_title'):
+                combined['contract_title'] = result.contract_title
+
+            # Extract contract date from first chunk that has it
+            if not combined['contract_date'] and hasattr(result, 'contract_date'):
+                combined['contract_date'] = result.contract_date
+
+            # Combine unique parties
+            if hasattr(result, 'parties_involved'):
+                for party in result.parties_involved:
+                    combined['parties_involved'].add((party.party_name, party.role))
+
+            # Combine clauses
+            if hasattr(result, 'clauses'):
+                combined['clauses'].extend(result.clauses)
+
+            # Combine amounts
+            if hasattr(result, 'amounts'):
+                combined['amounts'].update(set(result.amounts))
+
+        # Convert sets back to lists and create proper structure
+        return {
+            'contract_title': combined['contract_title'],
+            'contract_date': combined['contract_date'],
+            'parties_involved': [
+                {'party_name': name, 'role': role}
+                for name, role in combined['parties_involved']
+            ],
+            'clauses': combined['clauses'],
+            'amounts': list(combined['amounts'])
+        }
+
     def process_pdf(self, pdf_path: str | Path) -> ProcessingResponse:
         """Process a PDF file through the entire pipeline"""
         try:
@@ -152,9 +245,11 @@ class ContractProcessingAgent:
 
             # 1. Extract and structure contract metadata
             logger.info("Step 1: Extracting contract metadata")
+            chunks = chunk_text(text)
+            logger.info(f"Created {len(chunks)} chunks for processing")
 
-            metadata_prompt = f"""
-            You are an advanced AI document parsing specialist. Your task is to accurately extract contract metadata, structure clauses for processing, and flag potential issues while preserving legal integrity.
+            metadata_prompt = """
+            You are an advanced AI document parsing specialist. You are processing chunk {sequence_num} of {total_chunks}.
 
             **Step 1: Extract & Structure Contract Metadata**
             Extract and structure contract metadata according to the `Contract` class format.
@@ -171,24 +266,24 @@ class ContractProcessingAgent:
             **Step 2: Extract & Structure Major Contract Sections**
             Identify and extract key contract clauses, ensuring they align with the `Clause` class structure.
 
-            - **Clause Category (`clause_category`)** → Assign a general category based on the clause's legal function (e.g., Financial Terms, Termination, Confidentiality).
-            - **Clause Name (`clause_name`)** → Extract the exact heading/title of the clause.
-            - **Clause Text (`clause_text`)** → Extract the full clause content without truncation.
-            - **Related Dates (`related_dates`)** → Leave blank unless a date is detected (NER will handle this).
-            - **Amounts (`amounts`)** → Leave blank unless a monetary value is detected (NER will handle this).
+            - **Clause Category (`clause_category`)** → Assign a general category based on the clause's legal function
+            - **Clause Name (`clause_name`)** → Extract the exact heading/title of the clause
+            - **Clause Text (`clause_text`)** → Extract the full clause content
+            - **Related Dates (`related_dates`)** → Leave blank unless a date is detected
+            - **Amounts (`amounts`)** → Leave blank unless a monetary value is detected
             - **Metadata (`metadata`)**:
-            - `"confidence_score"`: AI confidence level for extracted text.
+            - `"confidence_score"`: AI confidence level for extracted text
 
             ⚠️ Flag any issues encountered during clause extraction:
-            - `"warning": "Reference to Section 5—full text unavailable."` (Cross-referenced but missing details).
-            - `"warning": "Clause may be incomplete—possible text truncation."` (Potential missing content).
+            - `"warning": "Reference to Section 5—full text unavailable."`
+            - `"warning": "Clause may be incomplete—possible text truncation."`
 
             **Step 3: Handle Formatting, OCR Issues & Error Detection**
             Ensure document formatting remains clean and detect common errors.
 
-            - **OCR Issues:** If text quality is poor, flag `"warning": "OCR issue detected—possible missing text."`
-            - **Section Numbering Errors:** If clause numbers are inconsistent, flag `"warning": "Clause numbering mismatch detected."`
-            - **Duplicate Clauses:** If similar clauses appear multiple times, flag `"warning": "Possible duplicate detected—review needed."`
+            - **OCR Issues:** Flag `"warning": "OCR issue detected—possible missing text."`
+            - **Section Numbering Errors:** Flag `"warning": "Clause numbering mismatch detected."`
+            - **Duplicate Clauses:** Flag `"warning": "Possible duplicate detected—review needed."`
 
             **Step 4: Validate Processing & Error Handling**
             Ensure structured contract output follows the `Contract` class format:
@@ -197,33 +292,24 @@ class ContractProcessingAgent:
             - `"status": "success"`
             - `"document": {{ structured contract output }}`
 
-            ❌ **Parsing Failure (If structure is inconsistent):**
+            ❌ **Parsing Failure:**
             - `"status": "failed"`
             - `"error": "Contract could not be parsed due to format inconsistency."`
 
-            **Final Execution Guidelines for AI**
-            ✅ Extract all contract metadata and structure it properly.
-            ✅ Ensure clauses align with predefined legal categories.
-            ✅ Prepare placeholders for NER processing (dates, amounts).
-            ✅ Detect and flag formatting errors, missing data, or inconsistencies.
-            ✅ Ensure structured output follows `Contract` and `ProcessingResponse` models.
-
-            Text: {text}
+            Text chunk to process: {text}
             """
 
-            logger.info(f"Metadata prompt length: {len(metadata_prompt)} characters")
-            metadata_result = self.parsing_agent.run(metadata_prompt)
-            logger.info(f"""
-            Metadata Extraction Results:
-                - Result type: {type(metadata_result)}
-                - Result dir: {dir(metadata_result)}
-                - Has content: {hasattr(metadata_result, 'content')}
-                - Content length: {len(metadata_result.content) if hasattr(metadata_result, 'content') else 'N/A'}
-            """)
+            metadata_results = self.process_chunks(
+                chunks,
+                self.parsing_agent.run,
+                metadata_prompt
+            )
+
+            combined_metadata = self.combine_metadata_results(metadata_results)
+            logger.info("Metadata extraction complete")
 
             # 2. Extract clauses
             logger.info("Step 2: Extracting clauses")
-
             clause_prompt = f"""
             You are an advanced AI contract clause extraction specialist. Extract and structure clauses with:
 
@@ -235,12 +321,12 @@ class ContractProcessingAgent:
 
             3. Detailed Extraction:
             - "clause_text": <full text>  # Complete clause text without truncation
-            - "related_dates": [<list of all dates found>]  # All dates mentioned in the clause
+            - "related_dates": [<list of all dates found>]  # All dates mentioned
             - "related_amounts": [<list of all monetary amounts>]  # All monetary values
 
             4. Metadata:
             - "metadata": {{
-                "confidence_score": <float between 0 and 1>,
+                "confidence_score": <float between 0 and 1>
             }}
 
             Output Format:
@@ -253,32 +339,22 @@ class ContractProcessingAgent:
                         "related_dates": ["2025-03-01", "2025-04-01"],
                         "related_amounts": ["$50,000", "$100,000"],
                         "metadata": {{
-                            "confidence_score": 0.95,
+                            "confidence_score": 0.95
                         }}
                     }}
                 ]
             }}
 
-            Important Guidelines:
-            1. Preserve all original text formatting and numbering
-            2. Extract all dates in YYYY-MM-DD format when possible
-            3. Include all monetary amounts with currency symbols
-            4. Maintain section hierarchy and relationships
-            5. Flag any incomplete or ambiguous clauses
-
-            Text: {text}
+            Input Metadata: {combined_metadata}
             """
 
             clauses_result = self.clause_agent.run(clause_prompt)
-            logger.debug(f"Raw clauses result: {clauses_result}")
-            logger.debug(f"Clauses type: {type(clauses_result)}")
-            logger.info(f"Clause extraction result: {clauses_result.content if hasattr(clauses_result, 'content') else clauses_result}")
+            logger.debug(f"Clauses extraction complete")
 
             # 3. Classify clauses
             logger.info("Step 3: Classifying clauses")
-
             classification_prompt = f"""
-            You are an advanced AI contract clause classification specialist. Your task is to analyze and categorize contract clauses based on their legal purpose and function, ensuring standardization, consistency, and accuracy.
+            You are an advanced AI contract clause classification specialist. Your task is to analyze and categorize contract clauses based on their legal purpose and function.
 
             ### **Step 1: Analyze Clause Context & Determine Classification**
             Classify each clause into one of the following predefined legal categories based on its content and function:
@@ -293,48 +369,23 @@ class ContractProcessingAgent:
 
             ### **Step 2: Verify Classification Confidence & Handle Uncertainty**
             ✅ **Accurate Classification:**
-            - If the clause explicitly states its category (e.g., "Payment Terms"), confirm it aligns with the extracted text.
-            - If multiple categories seem relevant, classify based on the **primary function** of the clause.
+            - If the clause explicitly states its category, confirm it aligns with the extracted text
+            - If multiple categories seem relevant, classify based on the **primary function**
 
             ✅ **Uncertain Classification:**
-            - If the AI **is unsure about a classification**, label it as `"Miscellaneous"` and **add a warning**.
+            - If uncertain, label as `"Miscellaneous"` and **add a warning**
             - Example: `"warning": "Clause classification uncertain—manual review needed."`
-            - If a clause **contains multiple legal functions** (e.g., penalties + termination), return the **primary category** and **flag it for human review**.
+            - If multiple legal functions detected, return **primary category** and **flag for review**
             - Example: `"warning": "Overlapping clause categories detected—review recommended."`
 
-            ### **Step 3: Ensure Legal Integrity & Formatting Consistency**
-            ✅ **Preserve Clause Formatting**
-            - Do **not alter or rephrase the clause text**—classification should be based on **legal function, not language style**.
-            - Maintain **section numbering and paragraph structure** to preserve context.
-
-            ✅ **Detect & Flag Misclassified Clauses**
-            - If a clause appears **misclassified based on content**, return:
-            - Example: `"warning": "Potential misclassification—manual verification recommended."`
-            - If a clause **does not match any category**, assign `"Miscellaneous"` and provide an explanation.
-
-            ### **Step 4: Validate Classification & Handle Errors**
-            ✅ **If Classification is Successful, Return:**
-            - `"status": "success"`
-            - `"document": {{ structured clause classification output }}`
-
-            ❌ **If Classification Fails (Unclear or Incomplete Clause), Return:**
-            - `"status": "failed"`
-            - `"error": "Clause classification failed due to ambiguous content."`
-
-            ⚠️ **Additional Warnings for Edge Cases:**
-            - `"warning": "Clause category inferred based on context—review recommended."`
-            - `"warning": "Clause references external section—full classification may be incomplete."`
-
-            Input Clauses: {clauses_result.content}
+            Input Clauses: {clauses_result.content if hasattr(clauses_result, 'content') else clauses_result}
             """
 
             classified_clauses = self.classification_agent.run(classification_prompt)
-            logger.info(f"Classification result: {classified_clauses.content if hasattr(classified_clauses, 'content') else classified_clauses}")
+            logger.info("Classification complete")
 
-
-            # 4. Extract entities from each clause
+            # 4. Extract entities
             logger.info("Step 4: Extracting named entities")
-
             ner_prompt = f"""
             You are an advanced AI Named Entity Recognition (NER) specialist for legal contracts. Your role is to extract and structure key legal entities, ensuring precision and reliability.
 
@@ -367,20 +418,13 @@ class ContractProcessingAgent:
             - If a party's role is unclear, flag it.
                 - Example: "warning": "Unclear entity reference—requires verification."
 
-            - **Governing Law & Jurisdiction**: Identify any legal jurisdiction references.
-            - If multiple legal jurisdictions are detected, flag them for review.
-            - Example: "warning": "Multiple jurisdictions detected—review required."
-
-            Ensure extracted values match the contract's references and flag unclear cases with appropriate warnings. The output structure must align with the expected Clause class format.
-
-            Input Clauses: {classified_clauses.content}
+            Input Clauses: {classified_clauses.content if hasattr(classified_clauses, 'content') else classified_clauses}
             """
 
             enriched_clauses = self.ner_agent.run(ner_prompt)
-            logger.info(f"NER result: {enriched_clauses.content if hasattr(enriched_clauses, 'content') else enriched_clauses}")
+            logger.info("NER processing complete")
 
-
-            # 5. Generate alternative clauses (optional)
+            # 5. Generate alternative clauses
             logger.info("Step 5: Generating alternative clauses")
             generation_prompt = f"""
             You are an advanced AI legal contract assistant specializing in contract clause enhancement. Your task is to improve existing contract clauses by ensuring clarity, legal robustness, and compliance while preserving the intended meaning.
@@ -395,15 +439,9 @@ class ContractProcessingAgent:
             - Enhance clarity by making terms explicit and reducing ambiguity
             - Strengthen legal enforceability by ensuring legally binding phrasing
             - Simplify complex wording while maintaining legal accuracy
-            - Ensure definitions of key terms are clear (e.g., jurisdiction, obligations, liabilities)
+            - Ensure definitions of key terms are clear
 
-            ### **Step 3: Validate Legal Compliance & Precision**
-            - Ensure compliance with standard legal best practices
-            - Maintain contractual intent while improving structure
-            - Confirm that revised clauses integrate seamlessly into the document
-            - If a clause is already optimal, return it as-is with a justification
-
-            ### **Step 4: Structured Output Format**
+            ### **Step 3: Structured Output Format**
             For each clause, return:
             {{
                 "clause_category": "Category",
@@ -412,18 +450,16 @@ class ContractProcessingAgent:
                 "modification_reason": "Explanation of changes or why no changes needed"
             }}
 
-            Input Clauses: {enriched_clauses.content}
+            Input Clauses: {enriched_clauses.content if hasattr(enriched_clauses, 'content') else enriched_clauses}
             """
 
             generated_clauses = self.generation_agent.run(generation_prompt)
-            logger.debug(f"Raw generated result: {generated_clauses}")
-            logger.debug(f"Generated type: {type(generated_clauses)}")
-            logger.info(f"Generation result: {generated_clauses.content if hasattr(generated_clauses, 'content') else generated_clauses}")
+            logger.info("Clause generation complete")
 
             # 6. Create contract summary
             logger.info("Step 6: Creating contract summary")
             summary_prompt = f"""
-            You are an advanced AI contract summarization specialist, trained to generate clear, structured summaries of legal agreements. Your goal is to provide a contract summary that captures key financial terms, risk factors, obligations, and termination conditions.
+            You are an advanced AI contract summarization specialist, trained to generate clear, structured summaries of legal agreements.
 
             ### **Step 1: Identify Core Contract Elements**
             Extract and summarize:
@@ -459,66 +495,28 @@ class ContractProcessingAgent:
             - Risk assessment (low/medium/high)
             - Unclear obligations
 
-            ### **Step 4: Structured Output Format**
-            Return as JSON:
-            {{
-                "contract_title": "Title",
-                "contract_date": "Date",
-                "parties_involved": [
-                    {{
-                        "party_name": "Name",
-                        "role": "Role"
-                    }}
-                ],
-                "summary": {{
-                    "agreement_scope": "Description",
-                    "financial_terms": {{
-                        "total_value": "Amount",
-                        "payment_schedule": "Schedule",
-                        "penalties": "Terms"
-                    }},
-                    "termination_terms": {{
-                        "notice_period": "Period",
-                        "penalties": "Terms"
-                    }},
-                    "confidentiality_terms": "Description",
-                    "risk_assessment": "Level and explanation"
-                }}
-            }}
-
-            Contract Metadata: {metadata_result.content}
-            Key Clauses: {generated_clauses.content}
+            Contract Metadata: {combined_metadata}
+            Processed Clauses: {generated_clauses.content if hasattr(generated_clauses, 'content') else generated_clauses}
             """
 
             summary_result = self.summary_agent.run(summary_prompt)
-            logger.debug(f"Raw summary result: {summary_result}")
-            logger.debug(f"Summary type: {type(summary_result)}")
-            logger.info(f"Summary result: {summary_result.content if hasattr(summary_result, 'content') else summary_result}")
+            logger.info("Summary generation complete")
 
             # 7. Combine results
             logger.info("Step 7: Combining all results")
             try:
-                # Get metadata from RunResponse
-                metadata_content = metadata_result.content if hasattr(metadata_result, 'content') else metadata_result
-
-                # Get clauses from RunResponse
+                metadata_content = combined_metadata
                 clauses_content = generated_clauses.content if hasattr(generated_clauses, 'content') else generated_clauses
-
-                # Get summary from RunResponse
                 summary_content = summary_result.content if hasattr(summary_result, 'content') else summary_result
-
-                # Add debug logging
-                logger.debug(f"Clauses content type: {type(clauses_content)}")
-                logger.debug(f"Clauses content: {clauses_content}")
 
                 contract_data = {
                     "pdf_name": pdf_path.name,
-                    "contract_title": metadata_content.contract_title,
-                    "contract_date": metadata_content.contract_date,
-                    "parties_involved": metadata_content.parties_involved,
-                    "clauses": metadata_content.clauses,
-                    "summary": summary_content.summary,
-                    "amounts": metadata_content.amounts
+                    "contract_title": metadata_content["contract_title"],
+                    "contract_date": metadata_content["contract_date"],
+                    "parties_involved": metadata_content["parties_involved"],
+                    "clauses": clauses_content.clauses if hasattr(clauses_content, 'clauses') else clauses_content,
+                    "summary": summary_content.summary if hasattr(summary_content, 'summary') else summary_content,
+                    "amounts": metadata_content["amounts"]
                 }
 
                 return ProcessingResponse(
@@ -526,13 +524,13 @@ class ContractProcessingAgent:
                     error=None,
                     document=Contract(**contract_data)
                 )
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON parsing error: {e}")
-                logger.error(f"Raw metadata content: {metadata_result.content if hasattr(metadata_result, 'content') else metadata_result}")
-                logger.error(f"Raw clauses content: {generated_clauses.content if hasattr(generated_clauses, 'content') else generated_clauses}")
+
+            except Exception as e:
+                logger.error(f"Error combining results: {e}", exc_info=True)
                 raise
 
         except Exception as e:
+            logger.error(f"Contract processing failed: {str(e)}", exc_info=True)
             return ProcessingResponse(
                 status="error",
                 error=f"Contract processing failed: {str(e)}",

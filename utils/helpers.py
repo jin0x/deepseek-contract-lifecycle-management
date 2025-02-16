@@ -33,37 +33,74 @@ def get_logger(name: str) -> logging.Logger:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     return logging.getLogger(name)
-def chunk_text(text: str, chunk_size: int = 3000, overlap: int = 200) -> List[str]:
 
-    """Split text into chunks with overlap."""
+
+def chunk_text(text: str, chunk_size: int = 4000, overlap: int = 500) -> List[dict]:
+    """Split text into overlapping chunks while preserving structural integrity.
+
+    Args:
+        text (str): The text to be chunked
+        chunk_size (int): Maximum size of each chunk (default: 4000 characters)
+        overlap (int): Number of characters to overlap between chunks (default: 500)
+
+    Returns:
+        List[dict]: List of chunk dictionaries containing:
+            - text: The chunk text
+            - start_idx: Starting index in original text
+            - end_idx: Ending index in original text
+            - sequence: Chunk sequence number
+    """
     # Find natural break points (paragraphs)
     paragraphs = text.split('\n\n')
     chunks = []
     current_chunk = []
     current_size = 0
+    chunk_count = 0
+    start_idx = 0
 
     for paragraph in paragraphs:
         paragraph_size = len(paragraph)
 
-        if current_size + paragraph_size > chunk_size:
+        # If adding this paragraph exceeds chunk size
+        if current_size + paragraph_size > chunk_size and current_chunk:
             # Store current chunk
             chunk_text = '\n\n'.join(current_chunk)
-            chunks.append(chunk_text)
+            end_idx = start_idx + len(chunk_text)
+            chunks.append({
+                'text': chunk_text,
+                'start_idx': start_idx,
+                'end_idx': end_idx,
+                'sequence': chunk_count
+            })
 
-            # Start new chunk with overlap from previous
-            if current_chunk and overlap > 0:
-                overlap_text = current_chunk[-1]
-                current_chunk = [overlap_text, paragraph]
-                current_size = len(overlap_text) + paragraph_size
-            else:
-                current_chunk = [paragraph]
-                current_size = paragraph_size
+            # Start new chunk with overlap
+            # Find the last complete paragraph that fits within overlap size
+            overlap_size = 0
+            overlap_paragraphs = []
+            for p in reversed(current_chunk):
+                if overlap_size + len(p) <= overlap:
+                    overlap_paragraphs.insert(0, p)
+                    overlap_size += len(p)
+                else:
+                    break
+
+            # Start new chunk with overlap paragraphs
+            current_chunk = overlap_paragraphs + [paragraph]
+            current_size = sum(len(p) for p in current_chunk)
+            start_idx = end_idx - overlap_size
+            chunk_count += 1
         else:
             current_chunk.append(paragraph)
             current_size += paragraph_size
 
     # Add the last chunk if there's anything left
     if current_chunk:
-        chunks.append('\n\n'.join(current_chunk))
+        chunk_text = '\n\n'.join(current_chunk)
+        chunks.append({
+            'text': chunk_text,
+            'start_idx': start_idx,
+            'end_idx': start_idx + len(chunk_text),
+            'sequence': chunk_count
+        })
 
     return chunks
