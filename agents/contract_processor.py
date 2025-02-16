@@ -332,34 +332,36 @@ class ContractProcessingAgent:
             # 5. Generate alternative clauses (optional)
             logger.info("Step 5: Generating alternative clauses")
             generation_prompt = f"""
-            You are an advanced AI legal contract assistant specializing in contract clause enhancement. Your task is to improve existing contract clauses by ensuring clarity, legal robustness, and compliance while preserving the intended meaning.
+            1. Enhancement Requirements:
+            - Preserve legal intent
+            - Remove ambiguity/redundancy
+            - Ensure term definitions
+            - Validate external references
 
-            ### **Step 1: Analyze Input Clause**
-            - Understand the legal intent of the clause within the contract
-            - Identify ambiguities, redundant phrasing, or vague legal language
-            - Ensure that all financial, confidentiality, and liability clauses are well-defined
-            - Flag any references to external sections (e.g., "as per Section 5") that lack details
+            2. Improvement Guidelines:
+            - Make terms explicit
+            - Use legally binding language
+            - Simplify without losing accuracy
+            - Maintain document consistency
 
-            ### **Step 2: Improve Clause Wording**
-            - Enhance clarity by making terms explicit and reducing ambiguity
-            - Strengthen legal enforceability by ensuring legally binding phrasing
-            - Simplify complex wording while maintaining legal accuracy
-            - Ensure definitions of key terms are clear (e.g., jurisdiction, obligations, liabilities)
-
-            ### **Step 3: Validate Legal Compliance & Precision**
-            - Ensure compliance with standard legal best practices
-            - Maintain contractual intent while improving structure
-            - Confirm that revised clauses integrate seamlessly into the document
-            - If a clause is already optimal, return it as-is with a justification
-
-            ### **Step 4: Structured Output Format**
-            For each clause, return:
+            3. Output Format:
             {{
-                "clause_category": "Category",
-                "original_clause_text": "Original text",
-                "improved_clause_text": "Improved version",
-                "modification_reason": "Explanation of changes or why no changes needed"
+                "clauses": [
+                    {{
+                        "clause_category": "Category",
+                        "original_clause_text": "Original",
+                        "improved_clause_text": "Enhanced",
+                        "modification_reason": "Change explanation",
+                        "warning": "optional_warning"
+                    }}
+                ]
             }}
+
+            4. Special Cases:
+            - Return optimal clauses as-is with justification
+            - Flag unclear external references
+            - Note undefined terms
+            - Mark ambiguous improvements
 
             Input Clauses: {enriched_clauses.content}
             """
